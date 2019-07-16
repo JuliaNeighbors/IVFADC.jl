@@ -1,0 +1,4 @@
+name = "IVFADC"
+uuid = "c28a5fd4-166f-4f83-b04d-195ccdb4ae51"
+authors = ["Corneliu Cofaru <cornel@oxoaresearch.com>"]
+version = "0.1.0"
