@@ -1,5 +1,5 @@
 module IVFADC
 
-greet() = print("Hello World!")
+# TODO(Corneliu): Implement
 
 end # module
