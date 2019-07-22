@@ -1,12 +1,12 @@
 struct InvertedList{U}
     idxs::Vector{Int}
-    codes::Matrix{U}
+    codes::Vector{Vector{U}}
 end
 
 
 struct CoarseQuantizer{D<:Distances.PreMetric, T<:AbstractFloat}
-    coarse_vectors::Matrix{T}
-    coarse_distance::D
+    vectors::Matrix{T}
+    distance::D
 end
 
 
@@ -15,10 +15,13 @@ struct IVFADCIndex{U<:Unsigned,
                    D2<:Distances.PreMetric,
                    T<:AbstractFloat}
     coarse_quantizer::CoarseQuantizer{D1,T}
-    residue_quantizer::QuantizedArrays.OrthogonalQuantizer{U,D2,T,2}
+    residual_quantizer::QuantizedArrays.OrthogonalQuantizer{U,D2,T,2}
     inverse_index::Dict{Int, InvertedList{U}}
 end
 
+
+Base.length(ivfadc::IVFADCIndex) =
+    mapreduce(ivlist->length(ivlist.codes), +, values(ivfadc.inverse_index))
 
 function build_index(data::Matrix{T};
                      kc::Int=DEFAULT_COARSE_K,
@@ -42,7 +45,7 @@ function build_index(data::Matrix{T};
                     init=:kmpp,
                     display=:none)
 
-    # Calculate residues
+    # Calculate residuals
     @debug "residual calculation..."
     residuals = _build_residuals(cmodel, data)
 
@@ -83,9 +86,35 @@ function _build_inverted_index(rq::QuantizedArrays.OrthogonalQuantizer{U,D,T,2},
     for cluster in 1:nclusters(km)
         idxs = findall(x->isequal(x, cluster), km.assignments)
         qdata = QuantizedArrays.quantize_data(rq, data[:, idxs])
-        push!(invindex, cluster => InvertedList(idxs, qdata))
+        ivlist = InvertedList(idxs, [qdata[:, j] for j in 1:length(idxs)])
+        push!(invindex, cluster => ivlist)
     end
     return invindex
+end
+
+
+function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T}, point::Vector{T}
+                      ) where{U,D1,D2,T}
+    # Checks
+    # TODO(Corneliu)
+
+    # Find belonging cluster
+    mpoint = reshape(point, length(point), 1)
+    dists = vec(pairwise(ivfadc.coarse_quantizer.distance,
+                         ivfadc.coarse_quantizer.vectors,
+                         mpoint,
+                         dims=2))
+    _, cluster = findmin(dists)
+
+    # Quantize residual
+    residual = ivfadc.coarse_quantizer.vectors[:, cluster] - mpoint
+    qv = vec(QuantizedArrays.quantize_data(ivfadc.residual_quantizer, residual))
+
+    # Insert in the inverted list corresponding to the cluster
+    newidx = length(ivfadc) + 1
+    push!(ivfadc.inverse_index[cluster].idxs, newidx)
+    push!(ivfadc.inverse_index[cluster].codes, qv)
+    return nothing
 end
 
 

@@ -10,7 +10,10 @@ using Clustering
 using StatsBase
 using QuantizedArrays
 
-export IVFADCIndex, build_index, knn_search
+export IVFADCIndex,
+       build_index,
+       add_to_index!,
+       knn_search
 
 include("core.jl")
 include("defaults.jl")
