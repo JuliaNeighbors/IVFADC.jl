@@ -1,7 +1,9 @@
 module TestIVFADC
 
 using Test
+using IVFADC
+using Distances
 
-@test true
+include("IVFADC.jl")
 
 end

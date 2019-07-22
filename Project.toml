@@ -3,6 +3,13 @@ uuid = "c28a5fd4-166f-4f83-b04d-195ccdb4ae51"
 authors = ["Corneliu Cofaru <cornel@oxoaresearch.com>"]
 version = "0.1.0"
 
+[deps]
+Clustering = "aaaa29a8-35af-508c-8bc3-b662a17a0fe5"
+Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+QuantizedArrays = "a7db621c-8ce0-11e9-16a1-0f86dc86bd10"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+
 [compat]
 julia = "1"
 
