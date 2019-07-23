@@ -23,6 +23,16 @@ end
 Base.length(ivfadc::IVFADCIndex) =
     mapreduce(ivlist->length(ivlist.codes), +, values(ivfadc.inverse_index))
 
+Base.size(ivfadc::IVFADCIndex) = (size(ivfadc.coarse_quantizer.vectors, 1),
+                                  length(ivfadc))
+
+Base.show(io::IO, ivfadc::IVFADCIndex{U,D1,D2,T}) where {U,D1,D2,T} = begin
+    nvars, nvectors = size(ivfadc)
+    nc = size(ivfadc.coarse_quantizer.vectors, 2)
+    print(io, "IVFADC Index, $nc coarse vectors, total of $nvectors-element $T vectors, $U codes")
+end
+
+
 function build_index(data::Matrix{T};
                      kc::Int=DEFAULT_COARSE_K,
                      k::Int=DEFAULT_QUANTIZATION_K,
