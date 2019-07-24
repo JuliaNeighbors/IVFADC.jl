@@ -110,16 +110,15 @@ function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
     # TODO(Corneliu)
 
     # Find belonging cluster
-    mpoint = reshape(point, length(point), 1)
-    dists = vec(pairwise(ivfadc.coarse_quantizer.distance,
-                         ivfadc.coarse_quantizer.vectors,
-                         mpoint,
-                         dims=2))
+    dists = colwise(ivfadc.coarse_quantizer.distance,
+                    ivfadc.coarse_quantizer.vectors,
+                    point)
     _, cluster = findmin(dists)
 
     # Quantize residual
-    residual = ivfadc.coarse_quantizer.vectors[:, cluster] - mpoint
-    qv = vec(QuantizedArrays.quantize_data(ivfadc.residual_quantizer, residual))
+    residual = ivfadc.coarse_quantizer.vectors[:, cluster] - point
+    qv = vec(QuantizedArrays.quantize_data(ivfadc.residual_quantizer,
+                                           reshape(residual, length(residual),1)))
 
     # Insert in the inverted list corresponding to the cluster
     newidx = length(ivfadc) + 1
@@ -138,11 +137,9 @@ function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
     # TODO
 
     # Find the 'w' closest coarse vectors
-    mpoint = reshape(point, length(point), 1)
-    dists = vec(pairwise(ivfadc.coarse_quantizer.distance,
-                         ivfadc.coarse_quantizer.vectors,
-                         mpoint,
-                         dims=2))
+    dists = colwise(ivfadc.coarse_quantizer.distance,
+                    ivfadc.coarse_quantizer.vectors,
+                    point)
     clusters = sortperm(dists)[1:w]
 
     # Calculate all residual distances
@@ -154,15 +151,15 @@ function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
     difftables = Vector{Dict{U,T}}(undef, m)
     for i in 1:m
         rr = QuantizedArrays.rowrange(n, m, i)
-        diffs = pairwise(distance, rcbs[i].vectors, mpoint[rr,:], dims=2)
-        difftables[i] = Dict{U,T}(zip(rcbs[i].codes, vec(diffs)))
+        diffs = colwise(distance, rcbs[i].vectors, point)
+        difftables[i] = Dict{U,T}(zip(rcbs[i].codes, diffs))
     end
 
     # Calculate distances between point and the vectors
     # from the clusters using the residual distances.
     ids = Vector{Int}()
     total_dists = Vector{T}()
-    @inbounds @simd for cl in clusters
+    @inbounds for cl in clusters
         d = dists[cl]
         ivlist = ivfadc.inverse_index[cl]
         for (id, code) in zip(ivlist.idxs, ivlist.codes)
