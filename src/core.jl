@@ -103,7 +103,8 @@ function _build_inverted_index(rq::QuantizedArrays.OrthogonalQuantizer{U,D,T,2},
 end
 
 
-function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T}, point::Vector{T}
+function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
+                       point::Vector{T}
                       ) where{U,D1,D2,T}
     # Checks
     # TODO(Corneliu)
@@ -128,9 +129,50 @@ function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T}, point::Vector{T}
 end
 
 
-function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T}, query::Vector{T}, k::Int
+function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
+                    point::Vector{T},
+                    k::Int;
+                    w::Int=1
                    ) where {U,D1,D2,T}
+    # Checks
+    # TODO
 
-    # TODO(Corneliu) Implement this
+    # Find the 'w' closest coarse vectors
+    mpoint = reshape(point, length(point), 1)
+    dists = vec(pairwise(ivfadc.coarse_quantizer.distance,
+                         ivfadc.coarse_quantizer.vectors,
+                         mpoint,
+                         dims=2))
+    clusters = sortperm(dists)[1:w]
 
+    # Calculate all residual distances
+    # (between the vector and the codebooks of the residual quantizer)
+    rcbs = ivfadc.residual_quantizer.codebooks
+    m, n = length(rcbs), length(point)
+    # TODO(Corneliu) Make sure that this distance makes sense.
+    distance = ivfadc.coarse_quantizer.distance
+    difftables = Vector{Dict{U,T}}(undef, m)
+    for i in 1:m
+        rr = QuantizedArrays.rowrange(n, m, i)
+        diffs = pairwise(distance, rcbs[i].vectors, mpoint[rr,:], dims=2)
+        difftables[i] = Dict{U,T}(zip(rcbs[i].codes, vec(diffs)))
+    end
+
+    # Calculate distances between point and the vectors
+    # from the clusters using the residual distances.
+    ids = Vector{Int}()
+    total_dists = Vector{T}()
+    @inbounds @simd for cl in clusters
+        d = dists[cl]
+        ivlist = ivfadc.inverse_index[cl]
+        for (id, code) in zip(ivlist.idxs, ivlist.codes)
+            for (i, code_el) in enumerate(code)
+                d += difftables[i][code_el]
+            end
+            push!(ids, id)
+            push!(total_dists, d)
+        end
+    end
+    idxs = sortperm(total_dists)[1:min(k, length(total_dists))]
+    return ids[idxs], total_dists[idxs]
 end

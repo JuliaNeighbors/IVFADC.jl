@@ -42,14 +42,16 @@ end
 end
 
 
-@testset "IVFADC: search" begin
-    @test true
+@testset "IVFADC: knn_search" begin
+    ivfadc = build_index_random_data()
     # Search single vector
-    ### K = 3  # number of neighbors
-    ### query = rand(nrows)
-    ### idxs, dists = knn_search(ivfadc, query, K)
+    K = 3  # number of neighbors
+    query = rand(nrows)
+    idxs, dists = knn_search(ivfadc, query, K, w=2)
+    @test idxs isa Vector{Int}
+    @test dists isa Vector{eltype(query)}
 
-    ### # Search multiple vectors
-    ### queries = [rand(nrows) for _ in 1:10]
-    ### idxs, dists = knn_search(ivfadc, queries, K)
+    # Search multiple vectors
+    #queries = [rand(nrows) for _ in 1:10]
+    #idxs, dists = knn_search(ivfadc, queries, K)
 end
