@@ -103,8 +103,7 @@ function _build_inverted_index(rq::QuantizedArrays.OrthogonalQuantizer{U,D,T,2},
 end
 
 
-function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
-                       point::Vector{T}
+function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T}, point::Vector{T}
                       ) where{U,D1,D2,T}
     # Checks
     # TODO(Corneliu)
@@ -128,13 +127,41 @@ function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
 end
 
 
+function delete_from_index!(ivfadc::IVFADCIndex{U,D1,D2,T}, points::Vector{Int}
+                           ) where{U,D1,D2,T}
+    for point in sort(unique(points), rev=true)
+        for (cl, ivlist) in ivfadc.inverse_index
+            if point in ivlist.idxs
+                pidx = findfirst(x->x==point, ivlist.idxs)
+                deleteat!(ivlist.idxs, pidx)
+                deleteat!(ivlist.codes, pidx)
+                _shift_inverse_index!(ivfadc.inverse_index, point)
+                break
+            end
+        end
+    end
+end
+
+
+function _shift_inverse_index!(inverse_index::Dict{Int, InvertedList{U}},
+                               point::Int) where{U}
+    for (cl, ivlist) in inverse_index
+        ivlist.idxs[ivlist.idxs .> point] .-= 1
+    end
+end
+
+
 function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
                     point::Vector{T},
                     k::Int;
                     w::Int=1
                    ) where {U,D1,D2,T}
-    # Checks
-    # TODO
+    # Checks and initializations
+    @assert k >= 1 "Number of neighbors must be k >= 1"
+    @assert w >= 1 "Number of clusters to search in must be w >= 1"
+
+    nclusters = size(ivfadc.coarse_quantizer.vectors, 2)
+    w = min(w, nclusters)
 
     # Find the 'w' closest coarse vectors
     dists = colwise(ivfadc.coarse_quantizer.distance,
@@ -151,7 +178,7 @@ function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
     difftables = Vector{Dict{U,T}}(undef, m)
     for i in 1:m
         rr = QuantizedArrays.rowrange(n, m, i)
-        diffs = colwise(distance, rcbs[i].vectors, point)
+        diffs = colwise(distance, rcbs[i].vectors, point[rr])
         difftables[i] = Dict{U,T}(zip(rcbs[i].codes, diffs))
     end
 

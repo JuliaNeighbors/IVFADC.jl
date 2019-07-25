@@ -4,7 +4,12 @@ CurrentModule=IVFADC
 
 # Introduction
 
-`IVFADC` implements an inverted file system with asymmetric distance computation for fast approximate nearest neighbor search in large datasets.
+`IVFADC` implements an inverted file system with asymmetric distance computation for fast approximate nearest neighbor search in large i.e. billion-scale, high dimensional datasets.
+
+!!! warning
+
+    This package is under heavy development and should not be used at this point in production systems.
+
 
 ## Implemented features
  - nothing yet

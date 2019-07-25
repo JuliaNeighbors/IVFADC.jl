@@ -1,6 +1,6 @@
 ![Alt text](https://github.com/zgornel/IVFADC.jl/blob/master/docs/src/assets/logo.png)
 
-Inverted file system with asymmetric distance computation for approximate nearest neighbor search.
+Inverted file system with asymmetric distance computation for billion-scale approximate nearest neighbor search.
 
 [![License](http://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat)](LICENSE.md)
 [![Build Status](https://travis-ci.org/zgornel/IVFADC.jl.svg?branch=master)](https://travis-ci.org/zgornel/IVFADC.jl)
@@ -8,7 +8,6 @@ Inverted file system with asymmetric distance computation for approximate neares
 [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://zgornel.github.io/IVFADC.jl/stable)
 [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://zgornel.github.io/IVFADC.jl/dev)
 
-## NOTE: The functionality is not implemented yet.
 
 ## Installation
 
