@@ -10,15 +10,60 @@ Inverted file system with asymmetric distance computation for billion-scale appr
 
 
 ## Installation
-
 ```julia
+using Pkg
 Pkg.add("IVFADC")
 ```
+or
+```julia
+Pkg.add(PackageSpec(url="https://github.com/zgornel/IVFADC.jl", rev="master"))
+```
+for the latest `master` branch.
 
 
 ## Examples
+
+### Create an index
 ```julia
-# TODO
+using IVFADC
+using Distances
+
+nrows, nvectors = 50, 1_000
+data = rand(Float32, nrows, nvectors)
+
+kc = 100  # coarse vectors (i.e. Voronoi cells)
+k = 256   # residual quantization levels/codebook
+m = 10	  # residual quantizer codebooks
+
+ivfadc = build_index(data,
+                     kc=kc,
+                     k=k,
+                     m=m,
+                     coarse_distance=SqEuclidean(),
+                     quantization_distance=SqEuclidean(),
+                     quantization_method=:pq)
+
+# IVFADC Index, 100 coarse vectors, total of 1000-element Float32 vectors, UInt8 codes
+```
+
+### Add ond delete points to the index
+```julia
+for i in 1:15
+    add_to_index!(ivfadc, rand(Float32, nrows))
+end
+length(ivfadc)
+# 1015
+
+delete_from_index!(ivfadc, [1, 2, 1010, 1015])
+length(ivfadc)
+# 1011
+```
+
+### Search the index
+```julia
+point = rand(Float32, nrows);
+knn_search(ivfadc, point, 3)
+# ([21, 263, 284], Float32[25.333912, 49.33256, 67.82121])
 ```
 
 
