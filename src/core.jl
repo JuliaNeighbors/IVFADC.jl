@@ -4,6 +4,9 @@ struct InvertedList{U}
 end
 
 
+const InvertedIndex{U} = Dict{Int, InvertedList{U}}
+
+
 struct CoarseQuantizer{D<:Distances.PreMetric, T<:AbstractFloat}
     vectors::Matrix{T}
     distance::D
@@ -16,7 +19,7 @@ struct IVFADCIndex{U<:Unsigned,
                    T<:AbstractFloat}
     coarse_quantizer::CoarseQuantizer{D1,T}
     residual_quantizer::QuantizedArrays.OrthogonalQuantizer{U,D2,T,2}
-    inverse_index::Dict{Int, InvertedList{U}}
+    inverse_index::InvertedIndex{U}
 end
 
 
@@ -92,7 +95,7 @@ end
 function _build_inverted_index(rq::QuantizedArrays.OrthogonalQuantizer{U,D,T,2},
                                km::KmeansResult,
                                data::Matrix{T}) where {U,D,T}
-    invindex = Dict{Int, InvertedList{U}}()
+    invindex = InvertedIndex{U}()
     for cluster in 1:nclusters(km)
         idxs = findall(x->isequal(x, cluster), km.assignments)
         qdata = QuantizedArrays.quantize_data(rq, data[:, idxs])
@@ -103,31 +106,36 @@ function _build_inverted_index(rq::QuantizedArrays.OrthogonalQuantizer{U,D,T,2},
 end
 
 
-function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T}, point::Vector{T}
+function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
+                       point::Vector{T}
                       ) where{U,D1,D2,T}
-    # Checks
-    # TODO(Corneliu)
+    # Checks and initializations
+    # TODO(Corneliu): Checks
+    cq_distance = ivfadc.coarse_quantizer.distance
+    cq_clcenters = ivfadc.coarse_quantizer.vectors
 
     # Find belonging cluster
-    dists = colwise(ivfadc.coarse_quantizer.distance,
-                    ivfadc.coarse_quantizer.vectors,
-                    point)
-    _, cluster = findmin(dists)
+    coarse_distances = colwise(cq_distance, cq_clcenters, point)
+    _, mincluster = findmin(coarse_distances)
 
     # Quantize residual
-    residual = ivfadc.coarse_quantizer.vectors[:, cluster] - point
-    qv = vec(QuantizedArrays.quantize_data(ivfadc.residual_quantizer,
-                                           reshape(residual, length(residual),1)))
+    residual = ivfadc.coarse_quantizer.vectors[:, mincluster] - point
+    qv = vec(QuantizedArrays.quantize_data(
+                ivfadc.residual_quantizer,
+                reshape(residual, length(residual),1)
+               )
+            )
 
     # Insert in the inverted list corresponding to the cluster
     newidx = length(ivfadc) + 1
-    push!(ivfadc.inverse_index[cluster].idxs, newidx)
-    push!(ivfadc.inverse_index[cluster].codes, qv)
+    push!(ivfadc.inverse_index[mincluster].idxs, newidx)
+    push!(ivfadc.inverse_index[mincluster].codes, qv)
     return nothing
 end
 
 
-function delete_from_index!(ivfadc::IVFADCIndex{U,D1,D2,T}, points::Vector{Int}
+function delete_from_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
+                            points::Vector{Int}
                            ) where{U,D1,D2,T}
     for point in sort(unique(points), rev=true)
         for (cl, ivlist) in ivfadc.inverse_index
@@ -143,8 +151,9 @@ function delete_from_index!(ivfadc::IVFADCIndex{U,D1,D2,T}, points::Vector{Int}
 end
 
 
-function _shift_inverse_index!(inverse_index::Dict{Int, InvertedList{U}},
-                               point::Int) where{U}
+function _shift_inverse_index!(inverse_index::InvertedIndex{U},
+                               point::Int
+                              ) where{U}
     for (cl, ivlist) in inverse_index
         ivlist.idxs[ivlist.idxs .> point] .-= 1
     end
@@ -160,43 +169,41 @@ function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
     @assert k >= 1 "Number of neighbors must be k >= 1"
     @assert w >= 1 "Number of clusters to search in must be w >= 1"
 
-    nclusters = size(ivfadc.coarse_quantizer.vectors, 2)
+    cq_distance = ivfadc.coarse_quantizer.distance
+    cq_clcenters = ivfadc.coarse_quantizer.vectors
+    nclusters = size(cq_clcenters, 2)
     w = min(w, nclusters)
 
     # Find the 'w' closest coarse vectors
-    dists = colwise(ivfadc.coarse_quantizer.distance,
-                    ivfadc.coarse_quantizer.vectors,
-                    point)
-    clusters = sortperm(dists)[1:w]
+    coarse_distances = colwise(cq_distance, cq_clcenters, point)
+    closest_clusters = sortperm(coarse_distances)[1:w]
 
     # Calculate all residual distances
     # (between the vector and the codebooks of the residual quantizer)
-    rcbs = ivfadc.residual_quantizer.codebooks
-    m, n = length(rcbs), length(point)
-    # TODO(Corneliu) Make sure that this distance makes sense.
-    distance = ivfadc.coarse_quantizer.distance
+    rq_cbooks = ivfadc.residual_quantizer.codebooks
+    m, n = length(rq_cbooks), length(point)
     difftables = Vector{Dict{U,T}}(undef, m)
     for i in 1:m
         rr = QuantizedArrays.rowrange(n, m, i)
-        diffs = colwise(distance, rcbs[i].vectors, point[rr])
-        difftables[i] = Dict{U,T}(zip(rcbs[i].codes, diffs))
+        diffs = colwise(cq_distance, rq_cbooks[i].vectors, point[rr])
+        difftables[i] = Dict{U,T}(zip(rq_cbooks[i].codes, diffs))
     end
 
     # Calculate distances between point and the vectors
     # from the clusters using the residual distances.
     ids = Vector{Int}()
-    total_dists = Vector{T}()
-    @inbounds for cl in clusters
-        d = dists[cl]
+    distances = Vector{T}()
+    @inbounds for cl in closest_clusters
+        d = coarse_distances[cl]
         ivlist = ivfadc.inverse_index[cl]
         for (id, code) in zip(ivlist.idxs, ivlist.codes)
             for (i, code_el) in enumerate(code)
                 d += difftables[i][code_el]
             end
             push!(ids, id)
-            push!(total_dists, d)
+            push!(distances, d)
         end
     end
-    idxs = sortperm(total_dists)[1:min(k, length(total_dists))]
-    return ids[idxs], total_dists[idxs]
+    idxs = sortperm(distances)[1:min(k, length(distances))]
+    return ids[idxs], distances[idxs]
 end
