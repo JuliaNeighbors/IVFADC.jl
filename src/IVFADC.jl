@@ -4,10 +4,8 @@
 
 module IVFADC
 
-using LinearAlgebra
 using Distances
 using Clustering
-using StatsBase
 using QuantizedArrays
 
 export IVFADCIndex,
