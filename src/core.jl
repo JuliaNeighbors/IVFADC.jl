@@ -47,10 +47,15 @@ function build_index(data::Matrix{T};
                      quantization_maxiter::Int=DEFAULT_QUANTIZATION_MAXITER
                     ) where {T<:AbstractFloat}
     # Checks
-    # TODO
+    nrows, nvectors = size(data)
+    @assert kc >= 2 "Number of coarse clusters has to be >= 2"
+    @assert k <= nvectors "Number of quantization levels  has to be <= $nvectors"
+    @assert m >= 1 && m <= nrows "Number of codebooks has to be between 1 and $nrows"
+    @assert coarse_maxiter > 0 "Number of clustering iterations has to be > 0"
+    @assert quantization_maxiter > 0 "Number of clustering iterations has to be > 0"
 
     # Run kmeans, build coarse quantizer
-    @debug "clustering..."
+    @debug "Clustering..."
     cmodel = kmeans(data,
                     kc,
                     maxiter=coarse_maxiter,
@@ -59,11 +64,11 @@ function build_index(data::Matrix{T};
                     display=:none)
 
     # Calculate residuals
-    @debug "residual calculation..."
+    @debug "Residual calculation..."
     residuals = _build_residuals(cmodel, data)
 
     # Build residuals quantizer
-    @debug "building quantizer..."
+    @debug "Building quantizer..."
     rq = build_quantizer(residuals,
                          k=k,
                          m=m,
@@ -72,11 +77,11 @@ function build_index(data::Matrix{T};
                          maxiter=quantization_maxiter)
 
     # Quantize residuals for each cluster
-    @debug "building inverted index..."
+    @debug "Building inverted index..."
     ii = _build_inverted_index(rq, cmodel, residuals)
 
     # Return
-    @debug "building coarse quantizer and returning"
+    @debug "Finalizing..."
     cq = CoarseQuantizer(cmodel.centers, coarse_distance)
     return IVFADCIndex(cq, rq, ii)
 end
@@ -110,7 +115,9 @@ function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
                        point::Vector{T}
                       ) where{U,D1,D2,T}
     # Checks and initializations
-    # TODO(Corneliu): Checks
+    nrows, nvectors = size(ivfadc)
+    @assert nrows == length(point) "Adding to index requires $nrows-element vectors"
+
     cq_distance = ivfadc.coarse_quantizer.distance
     cq_clcenters = ivfadc.coarse_quantizer.vectors
 
@@ -122,12 +129,12 @@ function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
     residual = ivfadc.coarse_quantizer.vectors[:, mincluster] - point
     qv = vec(QuantizedArrays.quantize_data(
                 ivfadc.residual_quantizer,
-                reshape(residual, length(residual),1)
+                reshape(residual, nrows, 1)
                )
             )
 
     # Insert in the inverted list corresponding to the cluster
-    newidx = length(ivfadc) + 1
+    newidx = nvectors + 1
     push!(ivfadc.inverse_index[mincluster].idxs, newidx)
     push!(ivfadc.inverse_index[mincluster].codes, qv)
     return nothing
