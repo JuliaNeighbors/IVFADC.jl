@@ -4,6 +4,7 @@
 
 module IVFADC
 
+using DataStructures
 using Distances
 using Clustering
 using QuantizedArrays

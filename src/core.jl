@@ -193,6 +193,8 @@ function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
     # from the clusters using the residual distances.
     ids = Vector{Int}()
     distances = Vector{T}()
+    neighbors = SortedMultiDict{T,Int}()
+    maxdist = zero(T)
     @inbounds for cl in closest_clusters
         d = coarse_distances[cl]
         ivlist = ivfadc.inverse_index[cl]
@@ -200,10 +202,15 @@ function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
             for (i, code_el) in enumerate(code)
                 d += difftables[i][code_el]
             end
-            push!(ids, id)
-            push!(distances, d)
+            if length(neighbors) < k
+                push!(neighbors, d=>id)
+                maxdist, _ = last(neighbors)
+            elseif maxdist > d
+                delete!((neighbors, lastindex(neighbors)))  # delete the max key
+                push!(neighbors, d=>id)
+                maxdist, _ = last(neighbors)
+            end
         end
     end
-    idxs = sortperm(distances)[1:min(k, length(distances))]
-    return ids[idxs], distances[idxs]
+    return collect(values(neighbors)), collect(keys(neighbors))
 end
