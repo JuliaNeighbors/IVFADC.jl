@@ -1,13 +1,12 @@
 # IVFADC.jl - inverted file system with asymmetric distance computation for
-#             billion-scale approximate nearest enighbor search
+#             billion-scale approximate nearest neighbor search
 #             written at 0x0α Research by Corneliu Cofaru, 2019
 
 module IVFADC
 
-using LinearAlgebra
+using DataStructures
 using Distances
 using Clustering
-using StatsBase
 using QuantizedArrays
 
 export IVFADCIndex,
