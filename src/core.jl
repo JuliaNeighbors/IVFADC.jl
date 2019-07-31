@@ -67,8 +67,7 @@ Base.length(ivfadc::IVFADCIndex) =
 
 Returns a tuple with the dimensionality and number of the vectors indexed by `ivfadc`.
 """
-Base.size(ivfadc::IVFADCIndex) = (size(ivfadc.coarse_quantizer.vectors, 1),
-                                  length(ivfadc))
+Base.size(ivfadc::IVFADCIndex) = (size(ivfadc.coarse_quantizer.vectors, 1), length(ivfadc))
 
 
 Base.show(io::IO, ivfadc::IVFADCIndex{U,D1,D2,T}) where {U,D1,D2,T} = begin
@@ -196,7 +195,7 @@ function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
     _, mincluster = findmin(coarse_distances)
 
     # Quantize residual
-    residual = ivfadc.coarse_quantizer.vectors[:, mincluster] - point
+    residual = point - ivfadc.coarse_quantizer.vectors[:, mincluster]
     qv = vec(QuantizedArrays.quantize_data(
                 ivfadc.residual_quantizer,
                 reshape(residual, nrows, 1)
@@ -262,22 +261,14 @@ function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
     cq_distance = ivfadc.coarse_quantizer.distance
     cq_clcenters = ivfadc.coarse_quantizer.vectors
     nclusters = size(cq_clcenters, 2)
-    w = min(w, nclusters)
-
-    # Find the 'w' closest coarse vectors
-    coarse_distances = colwise(cq_distance, cq_clcenters, point)
-    closest_clusters = sortperm(coarse_distances)[1:w]
-
-    # Calculate all residual distances
-    # (between the vector and the codebooks of the residual quantizer)
     rq_cbooks = ivfadc.residual_quantizer.codebooks
     m, n = length(rq_cbooks), length(point)
-    difftables = Vector{Dict{U,T}}(undef, m)
-    for i in 1:m
-        rr = QuantizedArrays.rowrange(n, m, i)
-        diffs = colwise(cq_distance, rq_cbooks[i].vectors, point[rr])
-        difftables[i] = Dict{U,T}(zip(rq_cbooks[i].codes, diffs))
-    end
+    w = min(w, nclusters)
+
+    # Find the 'w' closest coarse vectors and calculate residuals
+    coarse_distances = colwise(cq_distance, cq_clcenters, point)
+    closest_clusters = sortperm(coarse_distances)[1:w]
+    residuals = point .- cq_clcenters[:, closest_clusters]
 
     # Calculate distances between point and the vectors
     # from the clusters using the residual distances.
@@ -285,10 +276,19 @@ function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
     distances = Vector{T}()
     neighbors = SortedMultiDict{T,Int}()
     maxdist = zero(T)
-    @inbounds for cl in closest_clusters
-        d = coarse_distances[cl]
+    difftables = Vector{Dict{U,T}}(undef, m)
+    @inbounds for (j, cl) in enumerate(closest_clusters)
+        dc = coarse_distances[cl]
+        # Calculate all residual distances
+        # (between the vector and the codebooks of the residual quantizer)
+        for i in 1:m
+            rr = QuantizedArrays.rowrange(n, m, i)
+            diffs = colwise(cq_distance, rq_cbooks[i].vectors, residuals[rr, j])
+            difftables[i] = Dict{U,T}(zip(rq_cbooks[i].codes, diffs))
+        end
         ivlist = ivfadc.inverse_index[cl]
         for (id, code) in zip(ivlist.idxs, ivlist.codes)
+            d = dc
             for (i, code_el) in enumerate(code)
                 d += difftables[i][code_el]
             end
