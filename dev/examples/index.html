@@ -6,9 +6,9 @@ julia&gt; data = rand(10, 10_000);
 julia&gt; ivfadc = build_index(data, kc=500, k=256, m=5)
 IVFADC Index, 500 coarse vectors, total of 10000-element Float64 vectors, UInt8 codes</code></pre><p>Searching into the index is done with <code>knn_search</code></p><pre><code class="language-julia-repl">julia&gt; point = data[:, 1234];
 
-julia&gt; knn_search(ivfadc, point, 5)  # get three neighbors
-([950, 1234, 1374, 1936, 2220], [3.2343, 6.84767, 10.8641, 15.0286, 18.3126])</code></pre><p>Results may vary depending on how many clusters are being used to search into</p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)
-([950, 71, 658, 1027, 133], [3.2343, 3.74829, 3.90833, 4.12186, 4.18568])</code></pre><p>Adding and removing points is done with</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
+julia&gt; knn_search(ivfadc, point, 5)
+([527, 1234, 1918, 1920, 1957], [3.38299, 6.99795, 11.1095, 14.6922, 18.3987])</code></pre><p>Results may vary depending on how many clusters are being used to search into</p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)
+([4, 31, 61, 1404, 527], [2.81642, 3.12264, 3.32507, 3.35544, 3.38299])</code></pre><p>Adding and removing points is done with</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
            add_to_index!(ivfadc, rand(10))
        end
 
