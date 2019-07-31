@@ -1,18 +1,48 @@
-struct InvertedList{U}
+"""
+    InvertedList{U<:Unsigned}
+
+Basic structure which corresponds to the points found within
+a Voronoi cell. The fields `idxs` contains the indices of the
+points while `codes` contains quantized vector data.
+"""
+struct InvertedList{U<:Unsigned}
     idxs::Vector{Int}
     codes::Vector{Vector{U}}
 end
 
 
+"""
+Simple alias for `Dict{Int, InvertedList{U<:Unsigned}}`.
+"""
 const InvertedIndex{U} = Dict{Int, InvertedList{U}}
 
 
+"""
+    CoarseQuantizer{D<:Distances.PreMetric, T<:AbstractFloat}
+
+Coarse quantization structure. The `vector` fields contains the
+coarse vectors while `distance` contains the distance that is
+used to calculate the distance from a point to the coarse vectors.
+"""
 struct CoarseQuantizer{D<:Distances.PreMetric, T<:AbstractFloat}
     vectors::Matrix{T}
     distance::D
 end
 
 
+"""
+    IVFADCIndex{U<:Unsigned, D1<:Distances.PreMetric, D2<:Distances.PreMetric, T<:AbstractFloat}
+
+The inverse file system object. It allows for approximate nearest
+neighbor search into the contained vectors.
+
+# Fields
+  * `coarse_quantizer::CoarseQuantizer{D1,T}` contains the coarse vectors
+  * `residual_quantizer::QuantizedArrays.OrthogonalQuantizer{U,D2,T,2}`
+is employed to quantize vectors when adding to the index
+  * `inverse_index::InvertedIndex{U}` is the actual inverse index employed
+to perform the search.
+"""
 struct IVFADCIndex{U<:Unsigned,
                    D1<:Distances.PreMetric,
                    D2<:Distances.PreMetric,
@@ -23,11 +53,23 @@ struct IVFADCIndex{U<:Unsigned,
 end
 
 
+"""
+    length(ivfadc::IVFADCIndex)
+
+Returns the number of vectors indexed by `ivfadc`.
+"""
 Base.length(ivfadc::IVFADCIndex) =
     mapreduce(ivlist->length(ivlist.codes), +, values(ivfadc.inverse_index))
 
+
+"""
+    size(ivfadc::IVFADCIndex)
+
+Returns a tuple with the dimensionality and number of the vectors indexed by `ivfadc`.
+"""
 Base.size(ivfadc::IVFADCIndex) = (size(ivfadc.coarse_quantizer.vectors, 1),
                                   length(ivfadc))
+
 
 Base.show(io::IO, ivfadc::IVFADCIndex{U,D1,D2,T}) where {U,D1,D2,T} = begin
     nvars, nvectors = size(ivfadc)
@@ -36,6 +78,27 @@ Base.show(io::IO, ivfadc::IVFADCIndex{U,D1,D2,T}) where {U,D1,D2,T} = begin
 end
 
 
+"""
+    build_index(data [;kwargs])
+
+Builds an inverse file system for billion-scale ANN search.
+
+# Arguments
+  * `Matrix{T<:AbstractFloat}` input data
+
+# Keyword arguments
+  * `kc::Int=DEFAULT_COARSE_K` number of clusters (Voronoi cells) to employ
+in the coarse quantization step
+  * `k::Int=DEFAULT_QUANTIZATION_K` number of residual quantization levels to use
+  * `m::Int=DEFAULT_QUANTIZATION_M` number of residual quantizers to use
+  * `coarse_distance=DEFAULT_COARSE_DISTANCE` coarse quantization distance
+  * `quantization_distance=DEFAULT_QUANTIZATION_DISTANCE` residual quantization distance
+  * `quantization_method=DEFAULT_QUANTIZATION_METHOD` residual quantization method
+  * `coarse_maxiter=DEFAULT_COARSE_MAXITER` number of clustering iterations for obtaining
+the coarse vectors
+  * `quantization_maxiter=DEFAULT_QUANTIZATION_MAXITER` number of clustering iterations for
+residual quantization
+"""
 function build_index(data::Matrix{T};
                      kc::Int=DEFAULT_COARSE_K,
                      k::Int=DEFAULT_QUANTIZATION_K,
@@ -111,6 +174,13 @@ function _build_inverted_index(rq::QuantizedArrays.OrthogonalQuantizer{U,D,T,2},
 end
 
 
+"""
+    add_to_index!(ivfadc, point)
+
+Adds `point` to the index `ivfadc`; the point is assigned to a cluster
+and its quantized code added to the inverted list corresponding to the
+cluster.
+"""
 function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
                        point::Vector{T}
                       ) where{U,D1,D2,T}
@@ -141,6 +211,12 @@ function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
 end
 
 
+"""
+    delete_from_index!(ivfadc, points)
+
+Deletes the points with indices contained in `points` from
+the index `ivfadc`.
+"""
 function delete_from_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
                             points::Vector{Int}
                            ) where{U,D1,D2,T}
@@ -167,6 +243,13 @@ function _shift_inverse_index!(inverse_index::InvertedIndex{U},
 end
 
 
+"""
+    knn_search(ivfadc, point, k[; w=1])
+
+Searches at most `k` closest neighbors of `point` in the index `ivfadc`;
+the neighbors will be searched for in the points contained in the closest
+`w` clusters.
+"""
 function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
                     point::Vector{T},
                     k::Int;

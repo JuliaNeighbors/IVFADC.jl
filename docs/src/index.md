@@ -12,7 +12,10 @@ CurrentModule=IVFADC
 
 
 ## Implemented features
- - nothing yet
+ - building the index
+ - adding files to the index
+ - removing files from the index
+ - searching into the index
 
 ## Installation
 
