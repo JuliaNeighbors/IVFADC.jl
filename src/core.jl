@@ -12,9 +12,9 @@ end
 
 
 """
-Simple alias for `Dict{Int, InvertedList{U<:Unsigned}}`.
+Simple alias for `Vector{InvertedList{U<:Unsigned}}`.
 """
-const InvertedIndex{U} = Dict{Int, InvertedList{U}}
+const InvertedIndex{U} = Vector{InvertedList{U}}
 
 
 """
@@ -162,12 +162,13 @@ end
 function _build_inverted_index(rq::QuantizedArrays.OrthogonalQuantizer{U,D,T,2},
                                km::KmeansResult,
                                data::Matrix{T}) where {U,D,T}
-    invindex = InvertedIndex{U}()
-    for cluster in 1:nclusters(km)
+    n = nclusters(km)
+    invindex = InvertedIndex{U}(undef, n)
+    for cluster in 1:n
         idxs = findall(x->isequal(x, cluster), km.assignments)
         qdata = QuantizedArrays.quantize_data(rq, data[:, idxs])
         ivlist = InvertedList(idxs, [qdata[:, j] for j in 1:length(idxs)])
-        push!(invindex, cluster => ivlist)
+        invindex[cluster] = ivlist
     end
     return invindex
 end
@@ -220,7 +221,7 @@ function delete_from_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
                             points::Vector{Int}
                            ) where{U,D1,D2,T}
     for point in sort(unique(points), rev=true)
-        for (cl, ivlist) in ivfadc.inverse_index
+        for (cl, ivlist) in enumerate(ivfadc.inverse_index)
             if point in ivlist.idxs
                 pidx = findfirst(x->x==point, ivlist.idxs)
                 deleteat!(ivlist.idxs, pidx)
@@ -236,7 +237,7 @@ end
 function _shift_inverse_index!(inverse_index::InvertedIndex{U},
                                point::Int
                               ) where{U}
-    for (cl, ivlist) in inverse_index
+    for (cl, ivlist) in enumerate(inverse_index)
         ivlist.idxs[ivlist.idxs .> point] .-= 1
     end
 end
@@ -276,7 +277,7 @@ function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
     distances = Vector{T}()
     neighbors = SortedMultiDict{T,Int}()
     maxdist = zero(T)
-    difftables = Vector{Dict{U,T}}(undef, m)
+    difftables = Vector{LittleDict{U,T}}(undef, m)
     @inbounds for (j, cl) in enumerate(closest_clusters)
         dc = coarse_distances[cl]
         # Calculate all residual distances
@@ -284,8 +285,11 @@ function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
         for i in 1:m
             rr = QuantizedArrays.rowrange(n, m, i)
             diffs = colwise(cq_distance, rq_cbooks[i].vectors, residuals[rr, j])
-            difftables[i] = Dict{U,T}(zip(rq_cbooks[i].codes, diffs))
+            difftables[i] = LittleDict{U,T}(rq_cbooks[i].codes, diffs)
         end
+        # Loop through the iverted list and calculate
+        # the actual (quantized) distances through lookup;
+        # use SortedMultiDict as a maxheap for `k` neighbors
         ivlist = ivfadc.inverse_index[cl]
         for (id, code) in zip(ivlist.idxs, ivlist.codes)
             d = dc

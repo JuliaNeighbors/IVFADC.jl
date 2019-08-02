@@ -76,7 +76,7 @@ end
     @test length(ivfadc) == n-length(idxs_to_delete)
 
     # Test that indexes are correctly updated
-    for (cl, ivlist) in ivfadc_copy.inverse_index
+    for (cl, ivlist) in enumerate(ivfadc_copy.inverse_index)
         cluster_indexes = ivlist.idxs
         cluster_indexes_del = ivfadc.inverse_index[cl].idxs  # after deletion
         found = intersect(cluster_indexes, idxs_to_delete)
