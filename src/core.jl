@@ -1,20 +1,20 @@
 """
-    InvertedList{U<:Unsigned}
+    InvertedList{I<:Unsigned, U<:Unsigned}
 
 Basic structure which corresponds to the points found within
 a Voronoi cell. The fields `idxs` contains the indices of the
 points while `codes` contains quantized vector data.
 """
-struct InvertedList{U<:Unsigned}
-    idxs::Vector{Int}
+struct InvertedList{I<:Unsigned, U<:Unsigned}
+    idxs::Vector{I}
     codes::Vector{Vector{U}}
 end
 
 
 """
-Simple alias for `Vector{InvertedList{U<:Unsigned}}`.
+Simple alias for `Vector{InvertedList{I<:Unsigned, U<:Unsigned}}`.
 """
-const InvertedIndex{U} = Vector{InvertedList{U}}
+const InvertedIndex{I,U} = Vector{InvertedList{I,U}}
 
 
 """
@@ -31,7 +31,7 @@ end
 
 
 """
-    IVFADCIndex{U<:Unsigned, D1<:Distances.PreMetric, D2<:Distances.PreMetric, T<:AbstractFloat}
+    IVFADCIndex{U<:Unsigned, I<:Unsigned, D1<:Distances.PreMetric, D2<:Distances.PreMetric, T<:AbstractFloat}
 
 The inverse file system object. It allows for approximate nearest
 neighbor search into the contained vectors.
@@ -40,16 +40,17 @@ neighbor search into the contained vectors.
   * `coarse_quantizer::CoarseQuantizer{D1,T}` contains the coarse vectors
   * `residual_quantizer::QuantizedArrays.OrthogonalQuantizer{U,D2,T,2}`
 is employed to quantize vectors when adding to the index
-  * `inverse_index::InvertedIndex{U}` is the actual inverse index employed
+  * `inverse_index::InvertedIndex{I,U}` is the actual inverse index employed
 to perform the search.
 """
 struct IVFADCIndex{U<:Unsigned,
+                   I<:Unsigned,
                    D1<:Distances.PreMetric,
                    D2<:Distances.PreMetric,
                    T<:AbstractFloat}
     coarse_quantizer::CoarseQuantizer{D1,T}
     residual_quantizer::QuantizedArrays.OrthogonalQuantizer{U,D2,T,2}
-    inverse_index::InvertedIndex{U}
+    inverse_index::InvertedIndex{I,U}
 end
 
 
@@ -70,10 +71,10 @@ Returns a tuple with the dimensionality and number of the vectors indexed by `iv
 Base.size(ivfadc::IVFADCIndex) = (size(ivfadc.coarse_quantizer.vectors, 1), length(ivfadc))
 
 
-Base.show(io::IO, ivfadc::IVFADCIndex{U,D1,D2,T}) where {U,D1,D2,T} = begin
+Base.show(io::IO, ivfadc::IVFADCIndex{U,I,D1,D2,T}) where {U,I,D1,D2,T} = begin
     nvars, nvectors = size(ivfadc)
     nc = size(ivfadc.coarse_quantizer.vectors, 2)
-    print(io, "IVFADC Index, $nc coarse vectors, total of $nvectors-element $T vectors, $U codes")
+    print(io, "IVFADC Index $nvars×$nvectors $T vectors, $nc clusters, $U codes, $I indexes")
 end
 
 
@@ -97,6 +98,7 @@ in the coarse quantization step
 the coarse vectors
   * `quantization_maxiter=DEFAULT_QUANTIZATION_MAXITER` number of clustering iterations for
 residual quantization
+  * `index_type=UInt32` type for the indexes of the vectors in the inverted list
 """
 function build_index(data::Matrix{T};
                      kc::Int=DEFAULT_COARSE_K,
@@ -106,8 +108,9 @@ function build_index(data::Matrix{T};
                      quantization_distance::Distances.PreMetric=DEFAULT_QUANTIZATION_DISTANCE,
                      quantization_method::Symbol=DEFAULT_QUANTIZATION_METHOD,
                      coarse_maxiter::Int=DEFAULT_COARSE_MAXITER,
-                     quantization_maxiter::Int=DEFAULT_QUANTIZATION_MAXITER
-                    ) where {T<:AbstractFloat}
+                     quantization_maxiter::Int=DEFAULT_QUANTIZATION_MAXITER,
+                     index_type::Type{I}=UInt32
+                    ) where {I<:Unsigned, T<:AbstractFloat}
     # Checks
     nrows, nvectors = size(data)
     @assert kc >= 2 "Number of coarse clusters has to be >= 2"
@@ -140,7 +143,7 @@ function build_index(data::Matrix{T};
 
     # Quantize residuals for each cluster
     @debug "Building inverted index..."
-    ii = _build_inverted_index(rq, cmodel, residuals)
+    ii = _build_inverted_index(rq, cmodel, residuals, index_type=index_type)
 
     # Return
     @debug "Finalizing..."
@@ -161,13 +164,15 @@ end
 
 function _build_inverted_index(rq::QuantizedArrays.OrthogonalQuantizer{U,D,T,2},
                                km::KmeansResult,
-                               data::Matrix{T}) where {U,D,T}
+                               data::Matrix{T};
+                               index_type::Type{I}=UInt32
+                              ) where {U,I<:Unsigned,D,T}
     n = nclusters(km)
     invindex = InvertedIndex{U}(undef, n)
     for cluster in 1:n
         idxs = findall(x->isequal(x, cluster), km.assignments)
         qdata = QuantizedArrays.quantize_data(rq, data[:, idxs])
-        ivlist = InvertedList(idxs, [qdata[:, j] for j in 1:length(idxs)])
+        ivlist = InvertedList{I,U}(idxs, [qdata[:, j] for j in 1:length(idxs)])
         invindex[cluster] = ivlist
     end
     return invindex
@@ -181,9 +186,9 @@ Adds `point` to the index `ivfadc`; the point is assigned to a cluster
 and its quantized code added to the inverted list corresponding to the
 cluster.
 """
-function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
+function add_to_index!(ivfadc::IVFADCIndex{U,I,D1,D2,T},
                        point::Vector{T}
-                      ) where{U,D1,D2,T}
+                      ) where{U,I,D1,D2,T}
     # Checks and initializations
     nrows, nvectors = size(ivfadc)
     @assert nrows == length(point) "Adding to index requires $nrows-element vectors"
@@ -204,7 +209,7 @@ function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
             )
 
     # Insert in the inverted list corresponding to the cluster
-    newidx = nvectors + 1
+    newidx = convert(I, nvectors + 1)
     push!(ivfadc.inverse_index[mincluster].idxs, newidx)
     push!(ivfadc.inverse_index[mincluster].codes, qv)
     return nothing
@@ -217,7 +222,7 @@ end
 Deletes the points with indices contained in `points` from
 the index `ivfadc`.
 """
-function delete_from_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
+function delete_from_index!(ivfadc::IVFADCIndex{U,I,D1,D2,T},
                             points::Vector{Int}
                            ) where{U,D1,D2,T}
     for point in sort(unique(points), rev=true)
@@ -232,13 +237,13 @@ function delete_from_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
         end
     end
 end
+#TODO(Corneliu): Finish this
 
-
-function _shift_inverse_index!(inverse_index::InvertedIndex{U},
+function _shift_inverse_index!(inverse_index::InvertedIndex{I,U},
                                point::Int
-                              ) where{U}
+                              ) where{I,U}
     for (cl, ivlist) in enumerate(inverse_index)
-        ivlist.idxs[ivlist.idxs .> point] .-= 1
+        ivlist.idxs[ivlist.idxs .> point] .-= one(I)
     end
 end
 
