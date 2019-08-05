@@ -7,14 +7,14 @@ julia&gt; ivfadc = build_index(data, kc=20, k=32, m=2, index_type=UInt8)
 IVFADC Index 10×100 Float64 vectors, 20 clusters, UInt8 codes, UInt8 indexes</code></pre><h2><a class="nav-anchor" id="Searching-the-index-1" href="#Searching-the-index-1">Searching the index</a></h2><p>Searching into the index is done with <code>knn_search</code></p><pre><code class="language-julia-repl">julia&gt; point = data[:, 55];
 
 julia&gt; idxs, dists = knn_search(ivfadc, point, 5)
-(UInt8[0x36, 0x40, 0x10, 0x1d, 0x3c], [0.703038, 1.02172, 1.30944, 1.35685, 1.72836])</code></pre><p>Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based neighbor indexes that correspond to indexes in <code>data</code>, a simple transform has to be performed:</p><pre><code class="language-julia-repl">julia&gt; int_idxs = Int.(idxs) .+ 1
+(UInt8[0x36, 0x29, 0x40, 0x26, 0x11], [0.628303, 1.02142, 1.06123, 1.10278, 1.16139])</code></pre><p>Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based neighbor indexes that correspond to indexes in <code>data</code>, a simple transform has to be performed:</p><pre><code class="language-julia-repl">julia&gt; int_idxs = Int.(idxs) .+ 1
 5-element Array{Int64,1}:
  55
+ 42
  65
- 17
- 30
- 61</code></pre><p>Results may vary depending on how many clusters are being used to search into</p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
-(UInt8[0x36, 0x40, 0x10, 0x1d, 0x3c], [0.703038, 1.02172, 1.30944, 1.35685, 1.72836])</code></pre><h2><a class="nav-anchor" id="Updating-the-index-1" href="#Updating-the-index-1">Updating the index</a></h2><p>Adding and removing points to and from the index is done with the <code>add_to_index!</code> and <code>delete_from_index!</code> functions</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
+ 39
+ 18</code></pre><p>Results may vary depending on how many clusters are being used to search into</p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
+(UInt8[0x36, 0x29, 0x40, 0x26, 0x11], [0.628303, 1.02142, 1.06123, 1.10278, 1.16139])</code></pre><h2><a class="nav-anchor" id="Updating-the-index-1" href="#Updating-the-index-1">Updating the index</a></h2><p>Adding and removing points to and from the index is done with the <code>add_to_index!</code> and <code>delete_from_index!</code> functions</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
            add_to_index!(ivfadc, rand(10))
        end
 
@@ -23,6 +23,13 @@ IVFADC Index 10×105 Float64 vectors, 20 clusters, UInt8 codes, UInt8 indexes</c
 
 julia&gt; ivfadc
 IVFADC Index 10×102 Float64 vectors, 20 clusters, UInt8 codes, UInt8 indexes</code></pre><p>respectively.</p><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>When adding a new point, its index will always be the number of already existing points. When deleting points, the indexes of all points are updated so that they are consecutive.</p></div></div><h2><a class="nav-anchor" id="Limits-and-advanced-usage-of-the-index-1" href="#Limits-and-advanced-usage-of-the-index-1">Limits and advanced usage of the index</a></h2><p>It is not possible to add more points than the maximum value of the indexing type</p><pre><code class="language-julia-repl">julia&gt; ivfadc = build_index(rand(2,256), kc=2, k=16, m=1, index_type=UInt8)
-IVFADC Index 2×256 Float64 vectors, 2 clusters, UInt8 codes, UInt8 indexes</code></pre><p>Adding a new point to an index that already has 256 points (which is the maximum for the <code>UInt8</code>) throws an error</p><pre><code class="language-none">add_to_index!(ivfadc, rand(2))</code></pre><p>It is however possible to add the point after deleting another one</p><pre><code class="language-julia-repl">julia&gt; delete_from_index!(ivfadc, [1])
+IVFADC Index 2×256 Float64 vectors, 2 clusters, UInt8 codes, UInt8 indexes</code></pre><p>Adding a new point to an index that already has 256 points (which is the maximum for the <code>UInt8</code>) throws an error</p><pre><code class="language-julia-repl">julia&gt; add_to_index!(ivfadc, rand(2))
+ERROR: AssertionError: Cannot index, exceeding index capacity of 256 points</code></pre><p>It is however possible to add the point after deleting another one</p><pre><code class="language-julia-repl">julia&gt; delete_from_index!(ivfadc, [1])
 
-julia&gt; add_to_index!(ivfadc, rand(2))</code></pre><p>In the example above, the index is being used as a FIFO buffer where the first point is removed and the last one appended to the buffer.</p><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>Deleting from the index is a slow operation as the all indexes of the points contained need to be properly updated depending on the positions of the points that are being deleted.</p></div></div><footer><hr/><a class="previous" href="../"><span class="direction">Previous</span><span class="title">Introduction</span></a><a class="next" href="../api/"><span class="direction">Next</span><span class="title">API Reference</span></a></footer></article></body></html>
+julia&gt; ivfadc
+IVFADC Index 2×255 Float64 vectors, 2 clusters, UInt8 codes, UInt8 indexes
+
+julia&gt; add_to_index!(ivfadc, rand(2))
+
+julia&gt; ivfadc
+IVFADC Index 2×256 Float64 vectors, 2 clusters, UInt8 codes, UInt8 indexes</code></pre><p>In the example above, the index is being used as a FIFO buffer where the first point is removed and a new one is appended to the buffer.</p><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>Deleting from the index is a slow operation as the all indexes of the points contained need to be properly updated depending on the positions of the points that are being deleted.</p></div></div><footer><hr/><a class="previous" href="../"><span class="direction">Previous</span><span class="title">Introduction</span></a><a class="next" href="../api/"><span class="direction">Next</span><span class="title">API Reference</span></a></footer></article></body></html>
