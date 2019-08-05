@@ -2,7 +2,7 @@ const nvectors = 243
 const nrows = 10
 
 
-function build_index_random_data()
+function build_index_random_data(;index_type=UInt32)
     data = rand(nrows, nvectors)
     kc = 100    # number of coarse quantizer vectors
     k = 16     # quantization levels (for residuals)
@@ -20,7 +20,8 @@ function build_index_random_data()
                          quantization_distance=quantization_distance,
                          quantization_method=quantization_method,
                          coarse_maxiter=coarse_maxiter,
-                         quantization_maxiter=quantization_maxiter)
+                         quantization_maxiter=quantization_maxiter,
+                         index_type=index_type)
     return ivfadc
 end
 
@@ -43,12 +44,13 @@ end
 
 
 @testset "IVFADC: knn_search" begin
-    ivfadc = build_index_random_data()
+    INDEX_TYPE = UInt32
+    ivfadc = build_index_random_data(;index_type=INDEX_TYPE)
     # Search single vector
     K = 3  # number of neighbors
     query = rand(nrows)
     idxs, dists = knn_search(ivfadc, query, K, w=2)
-    @test idxs isa Vector{Int}
+    @test idxs isa Vector{INDEX_TYPE}
     @test dists isa Vector{eltype(query)}
 
     # Search multiple vectors
@@ -73,15 +75,15 @@ end
 
     # Test that points are deleted
     delete_from_index!(ivfadc, idxs_to_delete)
-    @test length(ivfadc) == n-length(idxs_to_delete)
+    @test length(ivfadc) == n - length(idxs_to_delete)
 
     # Test that indexes are correctly updated
     for (cl, ivlist) in enumerate(ivfadc_copy.inverse_index)
         cluster_indexes = ivlist.idxs
         cluster_indexes_del = ivfadc.inverse_index[cl].idxs  # after deletion
-        found = intersect(cluster_indexes, idxs_to_delete)
+        found = intersect(cluster_indexes, idxs_to_delete .- 1)
         @test length(cluster_indexes) == length(cluster_indexes_del) + length(found)
-        for (i, idx) in enumerate(cluster_indexes)
+        for (i, idx) in enumerate(cluster_indexes .+ 1)
             if idx > L1e && idx < L2s
                 shift = L1e - L1s + 1
             elseif idx > L2e && idx < L3s
@@ -92,7 +94,7 @@ end
 
             if shift != nothing
                 oldpos = i
-                newval = idx - shift
+                newval = idx - shift - 1
                 newpos = findfirst(x->x==newval, cluster_indexes_del)
                 @test ivfadc_copy.inverse_index[cl].codes[oldpos] ==
                     ivfadc.inverse_index[cl].codes[newpos]
