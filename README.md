@@ -41,9 +41,9 @@ ivfadc = build_index(data,
                      m=m,
                      coarse_distance=SqEuclidean(),
                      quantization_distance=SqEuclidean(),
-                     quantization_method=:pq)
-
-# IVFADC Index, 100 coarse vectors, total of 1000-element Float32 vectors, UInt8 codes
+                     quantization_method=:pq,
+                     index_type=UInt16)
+# IVFADC Index 50×1000 Float32 vectors, 100 clusters, UInt8 codes, UInt16 indexes
 ```
 
 ### Add ond delete points to the index
@@ -54,16 +54,22 @@ end
 length(ivfadc)
 # 1015
 
-delete_from_index!(ivfadc, [1, 2, 1010, 1015])
+delete_from_index!(ivfadc, [1000, 1001, 1010, 1015])
 length(ivfadc)
 # 1011
 ```
 
 ### Search the index
 ```julia
-point = rand(Float32, nrows);
-knn_search(ivfadc, point, 3)
-# ([21, 263, 284], Float32[25.333912, 49.33256, 67.82121])
+point = data[:, 123];
+idxs, dists = knn_search(ivfadc, point, 3)
+# (UInt16[0x007a, 0x0237, 0x0081], Float32[4.303085, 10.026548, 10.06385])
+
+int_idxs = Int.(idxs) .+ 1  # retrieve 1-based integer neighbors
+# 3-element Array{Int64,1}:
+#  123
+#  568
+#  130
 ```
 
 

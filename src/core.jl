@@ -1,20 +1,20 @@
 """
-    InvertedList{U<:Unsigned}
+    InvertedList{I<:Unsigned, U<:Unsigned}
 
 Basic structure which corresponds to the points found within
 a Voronoi cell. The fields `idxs` contains the indices of the
 points while `codes` contains quantized vector data.
 """
-struct InvertedList{U<:Unsigned}
-    idxs::Vector{Int}
+struct InvertedList{I<:Unsigned, U<:Unsigned}
+    idxs::Vector{I}
     codes::Vector{Vector{U}}
 end
 
 
 """
-Simple alias for `Vector{InvertedList{U<:Unsigned}}`.
+Simple alias for `Vector{InvertedList{I<:Unsigned, U<:Unsigned}}`.
 """
-const InvertedIndex{U} = Vector{InvertedList{U}}
+const InvertedIndex{I,U} = Vector{InvertedList{I,U}}
 
 
 """
@@ -31,25 +31,26 @@ end
 
 
 """
-    IVFADCIndex{U<:Unsigned, D1<:Distances.PreMetric, D2<:Distances.PreMetric, T<:AbstractFloat}
+    IVFADCIndex{U<:Unsigned, I<:Unsigned, Dc<:Distances.PreMetric, Dr<:Distances.PreMetric, T<:AbstractFloat}
 
 The inverse file system object. It allows for approximate nearest
 neighbor search into the contained vectors.
 
 # Fields
-  * `coarse_quantizer::CoarseQuantizer{D1,T}` contains the coarse vectors
-  * `residual_quantizer::QuantizedArrays.OrthogonalQuantizer{U,D2,T,2}`
+  * `coarse_quantizer::CoarseQuantizer{Dc,T}` contains the coarse vectors
+  * `residual_quantizer::QuantizedArrays.OrthogonalQuantizer{U,Dr,T,2}`
 is employed to quantize vectors when adding to the index
-  * `inverse_index::InvertedIndex{U}` is the actual inverse index employed
+  * `inverse_index::InvertedIndex{I,U}` is the actual inverse index employed
 to perform the search.
 """
 struct IVFADCIndex{U<:Unsigned,
-                   D1<:Distances.PreMetric,
-                   D2<:Distances.PreMetric,
+                   I<:Unsigned,
+                   Dc<:Distances.PreMetric,
+                   Dr<:Distances.PreMetric,
                    T<:AbstractFloat}
-    coarse_quantizer::CoarseQuantizer{D1,T}
-    residual_quantizer::QuantizedArrays.OrthogonalQuantizer{U,D2,T,2}
-    inverse_index::InvertedIndex{U}
+    coarse_quantizer::CoarseQuantizer{Dc,T}
+    residual_quantizer::QuantizedArrays.OrthogonalQuantizer{U,Dr,T,2}
+    inverse_index::InvertedIndex{I,U}
 end
 
 
@@ -70,10 +71,10 @@ Returns a tuple with the dimensionality and number of the vectors indexed by `iv
 Base.size(ivfadc::IVFADCIndex) = (size(ivfadc.coarse_quantizer.vectors, 1), length(ivfadc))
 
 
-Base.show(io::IO, ivfadc::IVFADCIndex{U,D1,D2,T}) where {U,D1,D2,T} = begin
+Base.show(io::IO, ivfadc::IVFADCIndex{U,I,Dc,Dr,T}) where {U,I,Dc,Dr,T} = begin
     nvars, nvectors = size(ivfadc)
     nc = size(ivfadc.coarse_quantizer.vectors, 2)
-    print(io, "IVFADC Index, $nc coarse vectors, total of $nvectors-element $T vectors, $U codes")
+    print(io, "IVFADC Index $nvars×$nvectors $T vectors, $nc clusters, $U codes, $I indexes")
 end
 
 
@@ -97,6 +98,7 @@ in the coarse quantization step
 the coarse vectors
   * `quantization_maxiter=DEFAULT_QUANTIZATION_MAXITER` number of clustering iterations for
 residual quantization
+  * `index_type=UInt32` type for the indexes of the vectors in the inverted list
 """
 function build_index(data::Matrix{T};
                      kc::Int=DEFAULT_COARSE_K,
@@ -106,15 +108,19 @@ function build_index(data::Matrix{T};
                      quantization_distance::Distances.PreMetric=DEFAULT_QUANTIZATION_DISTANCE,
                      quantization_method::Symbol=DEFAULT_QUANTIZATION_METHOD,
                      coarse_maxiter::Int=DEFAULT_COARSE_MAXITER,
-                     quantization_maxiter::Int=DEFAULT_QUANTIZATION_MAXITER
-                    ) where {T<:AbstractFloat}
+                     quantization_maxiter::Int=DEFAULT_QUANTIZATION_MAXITER,
+                     index_type::Type{I}=UInt32
+                    ) where {I<:Unsigned, T<:AbstractFloat}
     # Checks
     nrows, nvectors = size(data)
+    bits_required = ceil(Int, log2(nvectors))
     @assert kc >= 2 "Number of coarse clusters has to be >= 2"
     @assert k <= nvectors "Number of quantization levels  has to be <= $nvectors"
     @assert m >= 1 && m <= nrows "Number of codebooks has to be between 1 and $nrows"
     @assert coarse_maxiter > 0 "Number of clustering iterations has to be > 0"
     @assert quantization_maxiter > 0 "Number of clustering iterations has to be > 0"
+    @assert QuantizedArrays.TYPE_TO_BITS[index_type] >=
+        bits_required "$nvectors vectors require at least $bits_required index bits"
 
     # Run kmeans, build coarse quantizer
     @debug "Clustering..."
@@ -140,7 +146,7 @@ function build_index(data::Matrix{T};
 
     # Quantize residuals for each cluster
     @debug "Building inverted index..."
-    ii = _build_inverted_index(rq, cmodel, residuals)
+    ii = _build_inverted_index(rq, cmodel, residuals, index_type=index_type)
 
     # Return
     @debug "Finalizing..."
@@ -161,13 +167,17 @@ end
 
 function _build_inverted_index(rq::QuantizedArrays.OrthogonalQuantizer{U,D,T,2},
                                km::KmeansResult,
-                               data::Matrix{T}) where {U,D,T}
+                               data::Matrix{T};
+                               index_type::Type{I}=UInt32
+                              ) where {U,I<:Unsigned,D,T}
     n = nclusters(km)
-    invindex = InvertedIndex{U}(undef, n)
+    invindex = InvertedIndex{I,U}(undef, n)
     for cluster in 1:n
         idxs = findall(x->isequal(x, cluster), km.assignments)
         qdata = QuantizedArrays.quantize_data(rq, data[:, idxs])
-        ivlist = InvertedList(idxs, [qdata[:, j] for j in 1:length(idxs)])
+        ivlist = InvertedList{I,U}(
+                    idxs .- one(I),
+                    [qdata[:, j] for j in 1:length(idxs)])
         invindex[cluster] = ivlist
     end
     return invindex
@@ -181,12 +191,14 @@ Adds `point` to the index `ivfadc`; the point is assigned to a cluster
 and its quantized code added to the inverted list corresponding to the
 cluster.
 """
-function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
+function add_to_index!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
                        point::Vector{T}
-                      ) where{U,D1,D2,T}
+                      ) where{U,I,Dc,Dr,T}
     # Checks and initializations
     nrows, nvectors = size(ivfadc)
     @assert nrows == length(point) "Adding to index requires $nrows-element vectors"
+    @assert QuantizedArrays.TYPE_TO_BITS[I] >=
+        log2(nvectors+1) "Cannot index, exceeding index capacity of $(Int(typemax(I)+1)) points"
 
     cq_distance = ivfadc.coarse_quantizer.distance
     cq_clcenters = ivfadc.coarse_quantizer.vectors
@@ -204,8 +216,7 @@ function add_to_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
             )
 
     # Insert in the inverted list corresponding to the cluster
-    newidx = nvectors + 1
-    push!(ivfadc.inverse_index[mincluster].idxs, newidx)
+    push!(ivfadc.inverse_index[mincluster].idxs, nvectors)
     push!(ivfadc.inverse_index[mincluster].codes, qv)
     return nothing
 end
@@ -217,10 +228,10 @@ end
 Deletes the points with indices contained in `points` from
 the index `ivfadc`.
 """
-function delete_from_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
-                            points::Vector{Int}
-                           ) where{U,D1,D2,T}
-    for point in sort(unique(points), rev=true)
+function delete_from_index!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
+                            points::Vector{<:Integer}) where{U,I,Dc,Dr,T}
+    shifted_points = I.(points .- 1)  # shift points
+    for point in sort(unique(shifted_points), rev=true)
         for (cl, ivlist) in enumerate(ivfadc.inverse_index)
             if point in ivlist.idxs
                 pidx = findfirst(x->x==point, ivlist.idxs)
@@ -234,11 +245,9 @@ function delete_from_index!(ivfadc::IVFADCIndex{U,D1,D2,T},
 end
 
 
-function _shift_inverse_index!(inverse_index::InvertedIndex{U},
-                               point::Int
-                              ) where{U}
+function _shift_inverse_index!(inverse_index::InvertedIndex{I,U}, point::I) where{I,U}
     for (cl, ivlist) in enumerate(inverse_index)
-        ivlist.idxs[ivlist.idxs .> point] .-= 1
+        ivlist.idxs[ivlist.idxs .> point] .-= one(I)
     end
 end
 
@@ -250,11 +259,11 @@ Searches at most `k` closest neighbors of `point` in the index `ivfadc`;
 the neighbors will be searched for in the points contained in the closest
 `w` clusters.
 """
-function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
+function knn_search(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
                     point::Vector{T},
                     k::Int;
                     w::Int=1
-                   ) where {U,D1,D2,T}
+                   ) where {U,I,Dc,Dr,T}
     # Checks and initializations
     @assert k >= 1 "Number of neighbors must be k >= 1"
     @assert w >= 1 "Number of clusters to search in must be w >= 1"
@@ -273,9 +282,8 @@ function knn_search(ivfadc::IVFADCIndex{U,D1,D2,T},
 
     # Calculate distances between point and the vectors
     # from the clusters using the residual distances.
-    ids = Vector{Int}()
     distances = Vector{T}()
-    neighbors = SortedMultiDict{T,Int}()
+    neighbors = SortedMultiDict{T,I}()
     maxdist = zero(T)
     difftables = Vector{LittleDict{U,T}}(undef, m)
     @inbounds for (j, cl) in enumerate(closest_clusters)
