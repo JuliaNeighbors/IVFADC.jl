@@ -29,17 +29,29 @@ end
 @testset "IVFADC: build_index" begin
     ivfadc =  build_index_random_data()
     @test ivfadc isa IVFADCIndex
+
+    data = rand(2, 300)
+    @test_throws AssertionError build_index(data, kc=1, k=2, m=1)    # kc fail
+    @test_throws AssertionError build_index(data, kc=2, k=301, m=1)  # k fail
+    @test_throws AssertionError build_index(data, kc=2, k=300, m=3)  # m fail
+    @test_throws AssertionError build_index(data, index_type=UInt8)  # index_type fail
+
 end
 
 
 @testset "IVFADC: add_to_index!" begin
-    ivfadc = build_index_random_data()
+    ivfadc = build_index_random_data(; index_type=UInt8)
     ol = length(ivfadc)
-    nnv = 15
+    nnv = 256 - nvectors
     for i in 1:nnv
         add_to_index!(ivfadc, rand(nrows))
     end
+
     @test length(ivfadc) == ol + nnv
+    @test_throws AssertionError add_to_index!(ivfadc, rand(nrows))  # index is full
+
+    delete_from_index!(ivfadc, [1])
+    @test_throws AssertionError add_to_index!(ivfadc, rand(nrows+1))  # wrong dimension
 end
 
 
@@ -53,9 +65,8 @@ end
     @test idxs isa Vector{INDEX_TYPE}
     @test dists isa Vector{eltype(query)}
 
-    # Search multiple vectors
-    #queries = [rand(nrows) for _ in 1:10]
-    #idxs, dists = knn_search(ivfadc, queries, K)
+    @test_throws AssertionError knn_search(ivfadc, query, 0)
+    @test_throws AssertionError knn_search(ivfadc, query, 1, w=0)
 end
 
 
@@ -78,6 +89,7 @@ end
     @test length(ivfadc) == n - length(idxs_to_delete)
 
     # Test that indexes are correctly updated
+    mismatches = 0
     for (cl, ivlist) in enumerate(ivfadc_copy.inverse_index)
         cluster_indexes = ivlist.idxs
         cluster_indexes_del = ivfadc.inverse_index[cl].idxs  # after deletion
@@ -96,9 +108,12 @@ end
                 oldpos = i
                 newval = idx - shift - 1
                 newpos = findfirst(x->x==newval, cluster_indexes_del)
-                @test ivfadc_copy.inverse_index[cl].codes[oldpos] ==
-                    ivfadc.inverse_index[cl].codes[newpos]
+                if ivfadc_copy.inverse_index[cl].codes[oldpos] !=
+                        ivfadc.inverse_index[cl].codes[newpos]
+                    mismatches += 1
+                end
             end
         end
     end
+    @test mismatches == 0
 end
