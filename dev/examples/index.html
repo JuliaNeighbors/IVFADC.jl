@@ -7,11 +7,13 @@ julia&gt; ivfadc = build_index(data, kc=20, k=32, m=2, index_type=UInt8)
 IVFADC Index 10×100 Float64 vectors, 20 clusters, UInt8 codes, UInt8 indexes</code></pre><h2><a class="nav-anchor" id="Searching-the-index-1" href="#Searching-the-index-1">Searching the index</a></h2><p>Searching into the index is done with <code>knn_search</code></p><pre><code class="language-julia-repl">julia&gt; point = data[:, 55];
 
 julia&gt; idxs, dists = knn_search(ivfadc, point, 5)
-(UInt8[0x36, 0x33], [0.297011, 1.11729])</code></pre><p>Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based neighbor indexes that correspond to indexes in <code>data</code>, a simple transform has to be performed:</p><pre><code class="language-julia-repl">julia&gt; int_idxs = Int.(idxs) .+ 1
-2-element Array{Int64,1}:
+(UInt8[0x36, 0x2d, 0x54, 0x4c], [0.639981, 1.64478, 1.79447, 1.88182])</code></pre><p>Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based neighbor indexes that correspond to indexes in <code>data</code>, a simple transform has to be performed:</p><pre><code class="language-julia-repl">julia&gt; int_idxs = Int.(idxs) .+ 1
+4-element Array{Int64,1}:
  55
- 52</code></pre><p>Results may vary depending on how many clusters are being used to search into</p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
-(UInt8[0x36, 0x33, 0x09, 0x06, 0x37], [0.297011, 1.11729, 1.47507, 1.63728, 1.68043])</code></pre><h2><a class="nav-anchor" id="Updating-the-index-1" href="#Updating-the-index-1">Updating the index</a></h2><p>Adding and removing points to and from the index is done with the <code>add_to_index!</code> and <code>delete_from_index!</code> functions</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
+ 46
+ 85
+ 77</code></pre><p>Results may vary depending on how many clusters are being used to search into</p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
+(UInt8[0x36, 0x2d, 0x0e, 0x54, 0x4c], [0.639981, 1.64478, 1.78389, 1.79447, 1.88182])</code></pre><h2><a class="nav-anchor" id="Updating-the-index-1" href="#Updating-the-index-1">Updating the index</a></h2><p>Adding and removing points to and from the index is done with the <code>add_to_index!</code> and <code>delete_from_index!</code> functions</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
            add_to_index!(ivfadc, rand(10))
        end
 
