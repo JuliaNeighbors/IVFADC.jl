@@ -56,16 +56,18 @@ ivfadc = build_index(rand(2,256), kc=2, k=16, m=1, index_type=UInt8)
 ```
 Adding a new point to an index that already has 256 points (which is the maximum for the `UInt8`)
 throws an error
-```
+```@repl index
 add_to_index!(ivfadc, rand(2))
 ```
 It is however possible to add the point after deleting another one
 ```@repl index
 delete_from_index!(ivfadc, [1])
+ivfadc
 add_to_index!(ivfadc, rand(2))
+ivfadc
 ```
 In the example above, the index is being used as a FIFO buffer where the first point is removed
-and the last one appended to the buffer.
+and a new one is appended to the buffer.
 
 !!! note
 

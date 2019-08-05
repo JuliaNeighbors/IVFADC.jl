@@ -46,7 +46,7 @@ ivfadc = build_index(data,
 # IVFADC Index 50×1000 Float32 vectors, 100 clusters, UInt8 codes, UInt16 indexes
 ```
 
-### Add ond delete points to the index
+### Add and delete points to the index
 ```julia
 for i in 1:15
     add_to_index!(ivfadc, rand(Float32, nrows))
