@@ -173,7 +173,7 @@ function _build_inverted_index(rq::QuantizedArrays.OrthogonalQuantizer{U,D,T,2},
     n = nclusters(km)
     invindex = InvertedIndex{I,U}(undef, n)
     for cluster in 1:n
-        idxs = findall(x->isequal(x, cluster), km.assignments)
+        idxs = findall(isequal(cluster), km.assignments)
         qdata = QuantizedArrays.quantize_data(rq, data[:, idxs])
         ivlist = InvertedList{I,U}(
                     idxs .- one(I),
@@ -205,7 +205,7 @@ function add_to_index!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
 
     # Find belonging cluster
     coarse_distances = colwise(cq_distance, cq_clcenters, point)
-    _, mincluster = findmin(coarse_distances)
+    mincluster = argmin(coarse_distances)
 
     # Quantize residual
     residual = point - ivfadc.coarse_quantizer.vectors[:, mincluster]
@@ -234,7 +234,7 @@ function delete_from_index!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
     for point in sort(unique(shifted_points), rev=true)
         for (cl, ivlist) in enumerate(ivfadc.inverse_index)
             if point in ivlist.idxs
-                pidx = findfirst(x->x==point, ivlist.idxs)
+                pidx = findfirst(isequal(point), ivlist.idxs)
                 deleteat!(ivlist.idxs, pidx)
                 deleteat!(ivlist.codes, pidx)
                 _shift_inverse_index!(ivfadc.inverse_index, point)
@@ -286,7 +286,7 @@ function knn_search(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
     neighbors = SortedMultiDict{T,I}()
     maxdist = zero(T)
     difftables = Vector{LittleDict{U,T}}(undef, m)
-    @inbounds for (j, cl) in enumerate(closest_clusters)
+    for (j, cl) in enumerate(closest_clusters)
         dc = coarse_distances[cl]
         # Calculate all residual distances
         # (between the vector and the codebooks of the residual quantizer)
@@ -301,8 +301,8 @@ function knn_search(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
         ivlist = ivfadc.inverse_index[cl]
         for (id, code) in zip(ivlist.idxs, ivlist.codes)
             d = dc
-            for (i, code_el) in enumerate(code)
-                d += difftables[i][code_el]
+            for (i, c) in enumerate(code)
+                d += difftables[i][c]
             end
             if length(neighbors) < k
                 push!(neighbors, d=>id)
