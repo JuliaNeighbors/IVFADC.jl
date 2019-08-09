@@ -85,9 +85,9 @@ end
 
 
 """
-    build_index(data [;kwargs])
+    IVFADCIndex(data [;kwargs])
 
-Builds an inverse file system for billion-scale ANN search.
+Main constructor for building an inverse file system for billion-scale ANN search.
 
 # Arguments
   * `Matrix{T<:AbstractFloat}` input data
@@ -106,7 +106,7 @@ the coarse vectors
 residual quantization
   * `index_type=UInt32` type for the indexes of the vectors in the inverted list
 """
-function build_index(data::Matrix{T};
+function IVFADCIndex(data::Matrix{T};
                      kc::Int=DEFAULT_COARSE_K,
                      k::Int=DEFAULT_QUANTIZATION_K,
                      m::Int=DEFAULT_QUANTIZATION_M,
@@ -191,15 +191,12 @@ end
 
 
 """
-    add_to_index!(ivfadc, point)
+    push!(ivfadc, point)
 
-Adds `point` to the index `ivfadc`; the point is assigned to a cluster
-and its quantized code added to the inverted list corresponding to the
-cluster.
+Pushes `point` to the end of index `ivfadc`; the point is assigned to a cluster
+and its quantized code added to the inverted list corresponding to the cluster.
 """
-function add_to_index!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
-                       point::Vector{T}
-                      ) where{U,I,Dc,Dr,T}
+function push!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T}, point::Vector{T}) where{U,I,Dc,Dr,T}
     # Checks and initializations
     nrows, nvectors = size(ivfadc)
     @assert nrows == length(point) "Adding to index requires $nrows-element vectors"

@@ -14,7 +14,7 @@ function build_index_random_data(;index_type=UInt32)
     quantization_maxiter = 25
 
     # Build index
-    ivfadc = build_index(data,
+    ivfadc = IVFADCIndex(data,
                          kc=kc, k=k, m=m,
                          coarse_distance=coarse_distance,
                          quantization_distance=quantization_distance,
@@ -26,36 +26,36 @@ function build_index_random_data(;index_type=UInt32)
 end
 
 
-@testset "IVFADC: build_index" begin
+@testset "IVFADCIndex" begin
     ivfadc =  build_index_random_data()
     @test ivfadc isa IVFADCIndex
 
     data = rand(2, 300)
-    @test_throws AssertionError build_index(data, kc=1, k=2, m=1)    # kc fail
-    @test_throws AssertionError build_index(data, kc=2, k=301, m=1)  # k fail
-    @test_throws AssertionError build_index(data, kc=2, k=300, m=3)  # m fail
-    @test_throws AssertionError build_index(data, index_type=UInt8)  # index_type fail
+    @test_throws AssertionError IVFADCIndex(data, kc=1, k=2, m=1)    # kc fail
+    @test_throws AssertionError IVFADCIndex(data, kc=2, k=301, m=1)  # k fail
+    @test_throws AssertionError IVFADCIndex(data, kc=2, k=300, m=3)  # m fail
+    @test_throws AssertionError IVFADCIndex(data, index_type=UInt8)  # index_type fail
 
 end
 
 
-@testset "IVFADC: add_to_index!" begin
+@testset "push!" begin
     ivfadc = build_index_random_data(; index_type=UInt8)
     ol = length(ivfadc)
     nnv = 256 - nvectors
     for i in 1:nnv
-        add_to_index!(ivfadc, rand(nrows))
+        push!(ivfadc, rand(nrows))
     end
 
     @test length(ivfadc) == ol + nnv
-    @test_throws AssertionError add_to_index!(ivfadc, rand(nrows))  # index is full
+    @test_throws AssertionError push!(ivfadc, rand(nrows))  # index is full
 
     delete_from_index!(ivfadc, [1])
-    @test_throws AssertionError add_to_index!(ivfadc, rand(nrows+1))  # wrong dimension
+    @test_throws AssertionError push!(ivfadc, rand(nrows+1))  # wrong dimension
 end
 
 
-@testset "IVFADC: knn_search" begin
+@testset "knn_search" begin
     INDEX_TYPE = UInt32
     ivfadc = build_index_random_data(;index_type=INDEX_TYPE)
     # Search single vector
@@ -70,7 +70,7 @@ end
 end
 
 
-@testset "IVFADC: delete_from_index!" begin
+@testset "delete_from_index!" begin
     ivfadc = build_index_random_data()
     ivfadc_copy = deepcopy(ivfadc)
     n = length(ivfadc)

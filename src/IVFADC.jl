@@ -9,9 +9,9 @@ using Distances
 using Clustering
 using QuantizedArrays
 
+import Base: push!
+
 export IVFADCIndex,
-       build_index,
-       add_to_index!,
        delete_from_index!,
        knn_search
 
