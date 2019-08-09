@@ -11,6 +11,12 @@ struct InvertedList{I<:Unsigned, U<:Unsigned}
 end
 
 
+Base.show(io::IO, ivlist::InvertedList{I,U}) where {I,U} = begin
+    n = length(ivlist.idxs)
+    print(IO, "InvertedList{$I,$U}, $n vectors")
+end
+
+
 """
 Simple alias for `Vector{InvertedList{I<:Unsigned, U<:Unsigned}}`.
 """
