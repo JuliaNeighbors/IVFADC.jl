@@ -196,13 +196,47 @@ end
 Pushes `point` to the end of index `ivfadc`; the point is assigned to a cluster
 and its quantized code added to the inverted list corresponding to the cluster.
 """
-function push!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T}, point::Vector{T}) where{U,I,Dc,Dr,T}
+push!(ivfadc, point) = _push!(ivfadc, point, :last)
+
+
+"""
+    pushfirst!(ivfadc, point)
+
+Pushes `point` to the beginning of index `ivfadc`; the point is assigned to a cluster
+and its quantized code added to the inverted list corresponding to the cluster.
+"""
+pushfirst!(ivfadc, point) = _push!(ivfadc, point, :first)
+
+
+# Utility function for pushing
+function _push!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
+                point::Vector{T},
+                position::Symbol) where{U,I,Dc,Dr,T}
     # Checks and initializations
     nrows, nvectors = size(ivfadc)
     @assert nrows == length(point) "Adding to index requires $nrows-element vectors"
     @assert QuantizedArrays.TYPE_TO_BITS[I] >=
         log2(nvectors+1) "Cannot index, exceeding index capacity of $(Int(typemax(I)+1)) points"
 
+    qpoint, mincluster = _quantize_point(ivfadc, point)
+
+    # Insert in the inverted list corresponding to the cluster
+    vecid = nvectors
+    if position == :first
+        _shift_up_inverse_index!(ivfadc.inverse_index)
+        vecid = 0
+    end
+    push!(ivfadc.inverse_index[mincluster].idxs, vecid)
+    push!(ivfadc.inverse_index[mincluster].codes, qpoint)
+    return nothing
+end
+
+
+
+function _quantize_point(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
+                         point::Vector{T}
+                        ) where{U,I,Dc,Dr,T}
+    nrows, nvectors = size(ivfadc)
     cq_distance = ivfadc.coarse_quantizer.distance
     cq_clcenters = ivfadc.coarse_quantizer.vectors
 
@@ -212,18 +246,23 @@ function push!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T}, point::Vector{T}) where{U,I,Dc,
 
     # Quantize residual
     residual = point - ivfadc.coarse_quantizer.vectors[:, mincluster]
-    qv = vec(QuantizedArrays.quantize_data(
-                ivfadc.residual_quantizer,
-                reshape(residual, nrows, 1)
-               )
-            )
-
-    # Insert in the inverted list corresponding to the cluster
-    push!(ivfadc.inverse_index[mincluster].idxs, nvectors)
-    push!(ivfadc.inverse_index[mincluster].codes, qv)
-    return nothing
+    quantized_point = vec(QuantizedArrays.quantize_data(ivfadc.residual_quantizer,
+                            reshape(residual, nrows, 1)))
+    return quantized_point, mincluster
 end
 
+
+function _shift_up_inverse_index!(inverse_index::InvertedIndex{I,U}) where{I,U}
+    for (cl, ivlist) in enumerate(inverse_index)
+        ivlist.idxs .+= one(I)
+    end
+end
+
+function _shift_down_inverse_index!(inverse_index::InvertedIndex{I,U}) where{I,U}
+    for (cl, ivlist) in enumerate(inverse_index)
+        ivlist.idxs .-= one(I)
+    end
+end
 
 """
     delete_from_index!(ivfadc, points)

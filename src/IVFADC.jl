@@ -9,7 +9,7 @@ using Distances
 using Clustering
 using QuantizedArrays
 
-import Base: push!
+import Base: push!, pushfirst!, pop!, popfirst!
 
 export IVFADCIndex,
        delete_from_index!,
