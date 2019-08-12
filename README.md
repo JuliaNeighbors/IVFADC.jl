@@ -35,7 +35,7 @@ kc = 100  # coarse vectors (i.e. Voronoi cells)
 k = 256   # residual quantization levels/codebook
 m = 10	  # residual quantizer codebooks
 
-ivfadc = build_index(data,
+ivfadc = IVFADCIndex(data,
                      kc=kc,
                      k=k,
                      m=m,
@@ -47,9 +47,12 @@ ivfadc = build_index(data,
 ```
 
 ### Add and delete points to the index
+Points can be added to the index by using the `push!` and `pushfirst!` methods.
+Removing points from the index can be performed using the `pop!`, `popfirst!` and
+`delete_from_index!` methods.
 ```julia
 for i in 1:15
-    add_to_index!(ivfadc, rand(Float32, nrows))
+    push!(ivfadc, rand(Float32, nrows))
 end
 length(ivfadc)
 # 1015
@@ -57,6 +60,28 @@ length(ivfadc)
 delete_from_index!(ivfadc, [1000, 1001, 1010, 1015])
 length(ivfadc)
 # 1011
+```
+
+The `pop!` and `popfirst!` methods also return the indexed (and quantized) vectors respectively.
+```julia
+pop!(ivfadc)
+# 50-element Array{Float32,1}:
+#   0.30565456
+#   0.6903644
+#   ⋮
+#   0.20116138
+#   0.90699536
+
+popfirst!(ivfadc)
+# 50-element Array{Float32,1}:
+#  0.29412186
+#  0.0709379
+#  ⋮
+#  0.51727176
+#  0.69718516
+
+length(ivfadc)
+# 09
 ```
 
 ### Search the index

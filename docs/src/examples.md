@@ -1,12 +1,12 @@
 # Usage examples
 
 ## Building an IVFADC index
-Building an index can be performed with `build_index`
+Building an index can be performed using an outer constructor
 ```@repl index
 using IVFADC
 data = rand(10, 100);  # 100 points, 10 dimensions
 
-ivfadc = build_index(data, kc=20, k=32, m=2, index_type=UInt8)
+ivfadc = IVFADCIndex(data, kc=5, k=8, m=2, index_type=UInt8)
 ```
 
 ## Searching the index
@@ -29,47 +29,51 @@ knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
 ```
 
 ## Updating the index
-Adding and removing points to and from the index is done with the
-`add_to_index!` and `delete_from_index!` functions
+Adding and removing points to and from the index is done with
+`push!`, `pop!`, `pushfirst!` and `popfirst!` methods. As they imply,
+point can be added (and quantized) or removed (and reconstructed) at the
+beginning or end of the index. In practice, this implies updating the point
+indexes in the index, if the case.
 ```@repl index
 for i in 1:5
-    add_to_index!(ivfadc, rand(10))
+    push!(ivfadc, rand(10))
 end
 ivfadc
+pop!(ivfadc)
+pushfirst!(ivfadc, 0.1*collect(1:10))
+popfirst!(ivfadc)
 ```
-and
-```@repl index
-delete_from_index!(ivfadc, [1,2,3]);
-ivfadc
-```
-respectively.
-
 !!! note
 
     When adding a new point, its index will always be the number of already existing points.
     When deleting points, the indexes of all points are updated so that they are consecutive.
 
-## Limits and advanced usage of the index
-It is not possible to add more points than the maximum value of the indexing type
+The function `delete_from_index!` removes the points indicated in the vector of indexes.
 ```@repl index
-ivfadc = build_index(rand(2,256), kc=2, k=16, m=1, index_type=UInt8)
-```
-Adding a new point to an index that already has 256 points (which is the maximum for the `UInt8`)
-throws an error
-```@repl index
-add_to_index!(ivfadc, rand(2))
-```
-It is however possible to add the point after deleting another one
-```@repl index
-delete_from_index!(ivfadc, [1])
-ivfadc
-add_to_index!(ivfadc, rand(2))
+delete_from_index!(ivfadc, [10, 21, 32]);
 ivfadc
 ```
-In the example above, the index is being used as a FIFO buffer where the first point is removed
-and a new one is appended to the buffer.
 
 !!! note
 
     Deleting from the index is a slow operation as the all indexes of the points contained
     need to be properly updated depending on the positions of the points that are being deleted.
+
+## Limits and advanced usage of the index
+It is not possible to add more points than the maximum value of the indexing type
+```@repl index
+ivfadc = IVFADCIndex(rand(2,256), kc=2, k=16, m=1, index_type=UInt8)
+```
+Adding a new point to an index that already has 256 points (which is the maximum for the `UInt8`)
+throws an error
+```@repl index
+push!(ivfadc, rand(2))
+```
+It is however possible to add the point after deleting another one
+```@repl index
+popfirst!(ivfadc)
+push!(ivfadc, rand(2))
+ivfadc
+```
+In the example above, the index is being used as a FIFO buffer where the first point is removed
+and a new one is appended to the buffer.
