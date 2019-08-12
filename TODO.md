@@ -1,7 +1,4 @@
-- Add `push!`, `pushfirst!`, `popfirst!`, `pop!` methods
-- Remove `add_to_index!`
 - add loading and saving to disk methods
-- add option to specify number of points usable for training the coarse quantizer
 - Add paralellism support (via threading)
 - Optimize for batch operation (multiple searches) as well
 - Implement IVFOADC (hnsw coarse search + optimizations)

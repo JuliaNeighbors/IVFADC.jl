@@ -9,13 +9,14 @@ using Distances
 using Clustering
 using QuantizedArrays
 
+import Base: push!, pushfirst!, pop!, popfirst!
+
 export IVFADCIndex,
-       build_index,
-       add_to_index!,
        delete_from_index!,
        knn_search
 
-include("core.jl")
 include("defaults.jl")
+include("index.jl")
+include("utils.jl")
 
 end # module

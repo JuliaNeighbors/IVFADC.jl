@@ -11,6 +11,12 @@ struct InvertedList{I<:Unsigned, U<:Unsigned}
 end
 
 
+Base.show(io::IO, ivlist::InvertedList{I,U}) where {I,U} = begin
+    n = length(ivlist.idxs)
+    print(IO, "InvertedList{$I,$U}, $n vectors")
+end
+
+
 """
 Simple alias for `Vector{InvertedList{I<:Unsigned, U<:Unsigned}}`.
 """
@@ -60,7 +66,7 @@ end
 Returns the number of vectors indexed by `ivfadc`.
 """
 Base.length(ivfadc::IVFADCIndex) =
-    mapreduce(ivlist->length(ivlist.codes), +, values(ivfadc.inverse_index))
+    mapreduce(ivlist->length(ivlist.idxs), +, ivfadc.inverse_index)
 
 
 """
@@ -69,6 +75,7 @@ Base.length(ivfadc::IVFADCIndex) =
 Returns a tuple with the dimensionality and number of the vectors indexed by `ivfadc`.
 """
 Base.size(ivfadc::IVFADCIndex) = (size(ivfadc.coarse_quantizer.vectors, 1), length(ivfadc))
+Base.size(ivfadc::IVFADCIndex, i::Int) = size(ivfadc)[i]
 
 
 Base.show(io::IO, ivfadc::IVFADCIndex{U,I,Dc,Dr,T}) where {U,I,Dc,Dr,T} = begin
@@ -79,9 +86,9 @@ end
 
 
 """
-    build_index(data [;kwargs])
+    IVFADCIndex(data [;kwargs])
 
-Builds an inverse file system for billion-scale ANN search.
+Main constructor for building an inverse file system for billion-scale ANN search.
 
 # Arguments
   * `Matrix{T<:AbstractFloat}` input data
@@ -100,7 +107,7 @@ the coarse vectors
 residual quantization
   * `index_type=UInt32` type for the indexes of the vectors in the inverted list
 """
-function build_index(data::Matrix{T};
+function IVFADCIndex(data::Matrix{T};
                      kc::Int=DEFAULT_COARSE_K,
                      k::Int=DEFAULT_QUANTIZATION_K,
                      m::Int=DEFAULT_QUANTIZATION_M,
@@ -181,74 +188,6 @@ function _build_inverted_index(rq::QuantizedArrays.OrthogonalQuantizer{U,D,T,2},
         invindex[cluster] = ivlist
     end
     return invindex
-end
-
-
-"""
-    add_to_index!(ivfadc, point)
-
-Adds `point` to the index `ivfadc`; the point is assigned to a cluster
-and its quantized code added to the inverted list corresponding to the
-cluster.
-"""
-function add_to_index!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
-                       point::Vector{T}
-                      ) where{U,I,Dc,Dr,T}
-    # Checks and initializations
-    nrows, nvectors = size(ivfadc)
-    @assert nrows == length(point) "Adding to index requires $nrows-element vectors"
-    @assert QuantizedArrays.TYPE_TO_BITS[I] >=
-        log2(nvectors+1) "Cannot index, exceeding index capacity of $(Int(typemax(I)+1)) points"
-
-    cq_distance = ivfadc.coarse_quantizer.distance
-    cq_clcenters = ivfadc.coarse_quantizer.vectors
-
-    # Find belonging cluster
-    coarse_distances = colwise(cq_distance, cq_clcenters, point)
-    mincluster = argmin(coarse_distances)
-
-    # Quantize residual
-    residual = point - ivfadc.coarse_quantizer.vectors[:, mincluster]
-    qv = vec(QuantizedArrays.quantize_data(
-                ivfadc.residual_quantizer,
-                reshape(residual, nrows, 1)
-               )
-            )
-
-    # Insert in the inverted list corresponding to the cluster
-    push!(ivfadc.inverse_index[mincluster].idxs, nvectors)
-    push!(ivfadc.inverse_index[mincluster].codes, qv)
-    return nothing
-end
-
-
-"""
-    delete_from_index!(ivfadc, points)
-
-Deletes the points with indices contained in `points` from
-the index `ivfadc`.
-"""
-function delete_from_index!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
-                            points::Vector{<:Integer}) where{U,I,Dc,Dr,T}
-    shifted_points = I.(points .- 1)  # shift points
-    for point in sort(unique(shifted_points), rev=true)
-        for (cl, ivlist) in enumerate(ivfadc.inverse_index)
-            if point in ivlist.idxs
-                pidx = findfirst(isequal(point), ivlist.idxs)
-                deleteat!(ivlist.idxs, pidx)
-                deleteat!(ivlist.codes, pidx)
-                _shift_inverse_index!(ivfadc.inverse_index, point)
-                break
-            end
-        end
-    end
-end
-
-
-function _shift_inverse_index!(inverse_index::InvertedIndex{I,U}, point::I) where{I,U}
-    for (cl, ivlist) in enumerate(inverse_index)
-        ivlist.idxs[ivlist.idxs .> point] .-= one(I)
-    end
 end
 
 
