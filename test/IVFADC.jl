@@ -39,19 +39,54 @@ end
 end
 
 
-@testset "push!" begin
+@testset "push! / pushfirst!" begin
     ivfadc = build_index_random_data(; index_type=UInt8)
     ol = length(ivfadc)
     nnv = 256 - nvectors
+
+    # push!
     for i in 1:nnv
         push!(ivfadc, rand(nrows))
     end
-
     @test length(ivfadc) == ol + nnv
     @test_throws AssertionError push!(ivfadc, rand(nrows))  # index is full
-
     delete_from_index!(ivfadc, [1])
     @test_throws AssertionError push!(ivfadc, rand(nrows+1))  # wrong dimension
+
+    # pushfirst!
+    for i in 1:nnv-1
+        delete_from_index!(ivfadc, [i])
+    end
+    for i in 1:nnv
+        pushfirst!(ivfadc, rand(nrows))
+    end
+    @test length(ivfadc) == ol + nnv
+    @test_throws AssertionError pushfirst!(ivfadc, rand(nrows))  # index is full
+    delete_from_index!(ivfadc, [1])
+    @test_throws AssertionError pushfirst!(ivfadc, rand(nrows+1))  # wrong dimension
+end
+
+
+@testset "pop! / popfirst!" begin
+    ivfadc = build_index_random_data(; index_type=UInt8)
+    ol = length(ivfadc)
+    npops = 1
+    # pop!
+    for i in 1:npops
+        v = pop!(ivfadc)
+        @test v isa Vector{Float64}
+        @test length(v) == size(ivfadc, 1)
+    end
+    @test length(ivfadc) == ol - npops
+
+    # popfirst!
+    ol = length(ivfadc)
+    for i in 1:npops
+        v=popfirst!(ivfadc)
+        @test v isa Vector{Float64}
+        @test length(v) == size(ivfadc, 1)
+    end
+    @test length(ivfadc) == ol - npops
 end
 
 

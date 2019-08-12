@@ -66,7 +66,7 @@ end
 Returns the number of vectors indexed by `ivfadc`.
 """
 Base.length(ivfadc::IVFADCIndex) =
-    mapreduce(ivlist->length(ivlist.codes), +, values(ivfadc.inverse_index))
+    mapreduce(ivlist->length(ivlist.idxs), +, ivfadc.inverse_index)
 
 
 """
@@ -75,6 +75,7 @@ Base.length(ivfadc::IVFADCIndex) =
 Returns a tuple with the dimensionality and number of the vectors indexed by `ivfadc`.
 """
 Base.size(ivfadc::IVFADCIndex) = (size(ivfadc.coarse_quantizer.vectors, 1), length(ivfadc))
+Base.size(ivfadc::IVFADCIndex, i::Int) = size(ivfadc)[i]
 
 
 Base.show(io::IO, ivfadc::IVFADCIndex{U,I,Dc,Dr,T}) where {U,I,Dc,Dr,T} = begin
@@ -207,9 +208,11 @@ Pops from the index `ivfadc` the first point and returns it updating the index a
 popfirst!(ivfadc) = _pop!(ivfadc, :first)
 
 
+# Utility function for poping
 function _pop!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
                position::Symbol=:last
               ) where{U,I,Dc,Dr,T}
+    @assert length(ivfadc) > 0 "Cannot pop element from empty index"
     cluster = 0  # cluster with max index
     idx = 0      # index in inverted list
     (idxtopop, shift) = I.(ifelse(position==:last, (length(ivfadc)-1, 0), (0, 1)))
@@ -285,7 +288,6 @@ function _push!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
     push!(ivfadc.inverse_index[mincluster].codes, qpoint)
     return nothing
 end
-
 
 
 function _quantize_point(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
