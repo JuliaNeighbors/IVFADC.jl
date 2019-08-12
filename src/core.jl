@@ -191,6 +191,64 @@ end
 
 
 """
+    pop!(ivfadc)
+
+Pops from the index `ivfadc` the point with the highest index and returns it updating
+the index as well.
+"""
+pop!(ivfadc) = _pop!(ivfadc, :last)
+
+
+"""
+    popfirst!(ivfadc)
+
+Pops from the index `ivfadc` the first point and returns it updating the index as well.
+"""
+popfirst!(ivfadc) = _pop!(ivfadc, :first)
+
+
+function _pop!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
+               position::Symbol=:last
+              ) where{U,I,Dc,Dr,T}
+    cluster = 0  # cluster with max index
+    idx = 0      # index in inverted list
+    (idxtopop, shift) = I.(ifelse(position==:last, (length(ivfadc)-1, 0), (0, 1)))
+    local point_codes
+    for (cl, ivlist) in enumerate(ivfadc.inverse_index)
+        if idxtopop in ivlist.idxs
+            cluster = cl
+            idx = findfirst(isequal(idxtopop), ivlist.idxs)
+            point_codes = ivlist.codes[idx]
+        end
+    end
+
+    # Get point
+    reconstructed = ivfadc.coarse_quantizer.vectors[:, cluster] +
+                    _decode(ivfadc.residual_quantizer, point_codes)
+
+    # Delete index data
+    deleteat!(ivfadc.inverse_index[cluster].idxs, idx)
+    deleteat!(ivfadc.inverse_index[cluster].codes, idx)
+
+    # Shift index
+    _shift_down_inverse_index!(ivfadc.inverse_index, shift)
+    return reconstructed
+end
+
+
+function _decode(quantizer::QuantizedArrays.OrthogonalQuantizer{U,Dr,T,2}, codes::Vector{U}
+                ) where{U,Dr,T}
+    m, n = length(quantizer.codebooks), quantizer.dims[1]
+    residual = Vector{T}(undef, n)
+    @inbounds for i in 1:m
+        rr = QuantizedArrays.rowrange(n, m, i)
+        residual[rr] .= quantizer.codebooks[i][codes[i]]
+    end
+    return residual
+end
+
+
+"""
     push!(ivfadc, point)
 
 Pushes `point` to the end of index `ivfadc`; the point is assigned to a cluster
@@ -221,11 +279,8 @@ function _push!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
     qpoint, mincluster = _quantize_point(ivfadc, point)
 
     # Insert in the inverted list corresponding to the cluster
-    vecid = nvectors
-    if position == :first
-        _shift_up_inverse_index!(ivfadc.inverse_index)
-        vecid = 0
-    end
+    (vecid, shift) = ifelse(position == :first, (0, one(I)), (nvectors, zero(I)))
+    _shift_up_inverse_index!(ivfadc.inverse_index, shift)
     push!(ivfadc.inverse_index[mincluster].idxs, vecid)
     push!(ivfadc.inverse_index[mincluster].codes, qpoint)
     return nothing
@@ -252,17 +307,19 @@ function _quantize_point(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
 end
 
 
-function _shift_up_inverse_index!(inverse_index::InvertedIndex{I,U}) where{I,U}
+function _shift_up_inverse_index!(inverse_index::InvertedIndex{I,U}, by::I=one(I)) where{I,U}
     for (cl, ivlist) in enumerate(inverse_index)
-        ivlist.idxs .+= one(I)
+        ivlist.idxs .+= by
     end
 end
 
-function _shift_down_inverse_index!(inverse_index::InvertedIndex{I,U}) where{I,U}
+
+function _shift_down_inverse_index!(inverse_index::InvertedIndex{I,U}, by::I=one(I)) where{I,U}
     for (cl, ivlist) in enumerate(inverse_index)
-        ivlist.idxs .-= one(I)
+        ivlist.idxs .-= by
     end
 end
+
 
 """
     delete_from_index!(ivfadc, points)
