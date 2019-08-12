@@ -4,32 +4,31 @@
 julia&gt; data = rand(10, 100);  # 100 points, 10 dimensions
 
 julia&gt; ivfadc = build_index(data, kc=20, k=32, m=2, index_type=UInt8)
-IVFADC Index 10×100 Float64 vectors, 20 clusters, UInt8 codes, UInt8 indexes</code></pre><h2><a class="nav-anchor" id="Searching-the-index-1" href="#Searching-the-index-1">Searching the index</a></h2><p>Searching into the index is done with <code>knn_search</code></p><pre><code class="language-julia-repl">julia&gt; point = data[:, 55];
+ERROR: UndefVarError: build_index not defined</code></pre><h2><a class="nav-anchor" id="Searching-the-index-1" href="#Searching-the-index-1">Searching the index</a></h2><p>Searching into the index is done with <code>knn_search</code></p><pre><code class="language-julia-repl">julia&gt; point = data[:, 55];
 
 julia&gt; idxs, dists = knn_search(ivfadc, point, 5)
-(UInt8[0x36, 0x04, 0x16, 0x01, 0x10], [0.580913, 1.18349, 1.29466, 1.47573, 1.64577])</code></pre><p>Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based neighbor indexes that correspond to indexes in <code>data</code>, a simple transform has to be performed:</p><pre><code class="language-julia-repl">julia&gt; int_idxs = Int.(idxs) .+ 1
-5-element Array{Int64,1}:
- 55
-  5
- 23
-  2
- 17</code></pre><p>Results may vary depending on how many clusters are being used to search into</p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
-(UInt8[0x36, 0x1c, 0x04, 0x16, 0x2b], [0.580913, 1.08009, 1.18349, 1.29466, 1.3599])</code></pre><h2><a class="nav-anchor" id="Updating-the-index-1" href="#Updating-the-index-1">Updating the index</a></h2><p>Adding and removing points to and from the index is done with the <code>add_to_index!</code> and <code>delete_from_index!</code> functions</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
+ERROR: UndefVarError: ivfadc not defined</code></pre><p>Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based neighbor indexes that correspond to indexes in <code>data</code>, a simple transform has to be performed:</p><pre><code class="language-julia-repl">julia&gt; int_idxs = Int.(idxs) .+ 1
+ERROR: UndefVarError: idxs not defined</code></pre><p>Results may vary depending on how many clusters are being used to search into</p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
+ERROR: UndefVarError: ivfadc not defined</code></pre><h2><a class="nav-anchor" id="Updating-the-index-1" href="#Updating-the-index-1">Updating the index</a></h2><p>Adding and removing points to and from the index is done with the <code>add_to_index!</code> and <code>delete_from_index!</code> functions</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
            add_to_index!(ivfadc, rand(10))
        end
+ERROR: UndefVarError: add_to_index! not defined
 
 julia&gt; ivfadc
-IVFADC Index 10×105 Float64 vectors, 20 clusters, UInt8 codes, UInt8 indexes</code></pre><p>and</p><pre><code class="language-julia-repl">julia&gt; delete_from_index!(ivfadc, [1,2,3]);
+ERROR: UndefVarError: ivfadc not defined</code></pre><p>and</p><pre><code class="language-julia-repl">julia&gt; delete_from_index!(ivfadc, [1,2,3]);
+ERROR: UndefVarError: ivfadc not defined
 
 julia&gt; ivfadc
-IVFADC Index 10×102 Float64 vectors, 20 clusters, UInt8 codes, UInt8 indexes</code></pre><p>respectively.</p><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>When adding a new point, its index will always be the number of already existing points. When deleting points, the indexes of all points are updated so that they are consecutive.</p></div></div><h2><a class="nav-anchor" id="Limits-and-advanced-usage-of-the-index-1" href="#Limits-and-advanced-usage-of-the-index-1">Limits and advanced usage of the index</a></h2><p>It is not possible to add more points than the maximum value of the indexing type</p><pre><code class="language-julia-repl">julia&gt; ivfadc = build_index(rand(2,256), kc=2, k=16, m=1, index_type=UInt8)
-IVFADC Index 2×256 Float64 vectors, 2 clusters, UInt8 codes, UInt8 indexes</code></pre><p>Adding a new point to an index that already has 256 points (which is the maximum for the <code>UInt8</code>) throws an error</p><pre><code class="language-julia-repl">julia&gt; add_to_index!(ivfadc, rand(2))
-ERROR: AssertionError: Cannot index, exceeding index capacity of 256 points</code></pre><p>It is however possible to add the point after deleting another one</p><pre><code class="language-julia-repl">julia&gt; delete_from_index!(ivfadc, [1])
+ERROR: UndefVarError: ivfadc not defined</code></pre><p>respectively.</p><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>When adding a new point, its index will always be the number of already existing points. When deleting points, the indexes of all points are updated so that they are consecutive.</p></div></div><h2><a class="nav-anchor" id="Limits-and-advanced-usage-of-the-index-1" href="#Limits-and-advanced-usage-of-the-index-1">Limits and advanced usage of the index</a></h2><p>It is not possible to add more points than the maximum value of the indexing type</p><pre><code class="language-julia-repl">julia&gt; ivfadc = build_index(rand(2,256), kc=2, k=16, m=1, index_type=UInt8)
+ERROR: UndefVarError: build_index not defined</code></pre><p>Adding a new point to an index that already has 256 points (which is the maximum for the <code>UInt8</code>) throws an error</p><pre><code class="language-julia-repl">julia&gt; add_to_index!(ivfadc, rand(2))
+ERROR: UndefVarError: add_to_index! not defined</code></pre><p>It is however possible to add the point after deleting another one</p><pre><code class="language-julia-repl">julia&gt; delete_from_index!(ivfadc, [1])
+ERROR: UndefVarError: ivfadc not defined
 
 julia&gt; ivfadc
-IVFADC Index 2×255 Float64 vectors, 2 clusters, UInt8 codes, UInt8 indexes
+ERROR: UndefVarError: ivfadc not defined
 
 julia&gt; add_to_index!(ivfadc, rand(2))
+ERROR: UndefVarError: add_to_index! not defined
 
 julia&gt; ivfadc
-IVFADC Index 2×256 Float64 vectors, 2 clusters, UInt8 codes, UInt8 indexes</code></pre><p>In the example above, the index is being used as a FIFO buffer where the first point is removed and a new one is appended to the buffer.</p><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>Deleting from the index is a slow operation as the all indexes of the points contained need to be properly updated depending on the positions of the points that are being deleted.</p></div></div><footer><hr/><a class="previous" href="../"><span class="direction">Previous</span><span class="title">Introduction</span></a><a class="next" href="../api/"><span class="direction">Next</span><span class="title">API Reference</span></a></footer></article></body></html>
+ERROR: UndefVarError: ivfadc not defined</code></pre><p>In the example above, the index is being used as a FIFO buffer where the first point is removed and a new one is appended to the buffer.</p><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>Deleting from the index is a slow operation as the all indexes of the points contained need to be properly updated depending on the positions of the points that are being deleted.</p></div></div><footer><hr/><a class="previous" href="../"><span class="direction">Previous</span><span class="title">Introduction</span></a><a class="next" href="../api/"><span class="direction">Next</span><span class="title">API Reference</span></a></footer></article></body></html>
