@@ -54,6 +54,13 @@ function save_ivfadc_index(filename::AbstractString, ivfadc::IVFADCIndex{U,I,Dc,
     end
 end
 
+_get_module_and_symbol(line) = begin
+    if occursin('.', line)
+        return String.(split(line, "."))
+    else
+        return @__MODULE__, line
+    end
+end
 
 # Generate a WordVectors object from binary file
 function load_ivfadc_index(filename::AbstractString)
@@ -64,9 +71,9 @@ function load_ivfadc_index(filename::AbstractString)
         Q = eval(Expr(:., Symbol(_module), QuoteNode(Symbol(_val))))
         U = eval(Symbol(readline(fid)))
         I = eval(Symbol(readline(fid)))
-        _module, _val = split(readline(fid), ".")
+        _module, _val = _get_module_and_symbol(readline(fid))
         Dc = eval(Expr(:., Symbol(_module), QuoteNode(Symbol(_val))))
-        _module, _val = split(readline(fid), ".")
+        _module, _val = _get_module_and_symbol(readline(fid))
         Dr = eval(Expr(:., Symbol(_module), QuoteNode(Symbol(_val))))
         T = eval(Symbol(readline(fid)))
 
