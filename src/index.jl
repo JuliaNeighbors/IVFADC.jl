@@ -13,7 +13,7 @@ end
 
 Base.show(io::IO, ivlist::InvertedList{I,U}) where {I,U} = begin
     n = length(ivlist.idxs)
-    print(IO, "InvertedList{$I,$U}, $n vectors")
+    print(io, "InvertedList{$I,$U}, $n vectors")
 end
 
 
@@ -33,6 +33,12 @@ used to calculate the distance from a point to the coarse vectors.
 struct CoarseQuantizer{D<:Distances.PreMetric, T<:AbstractFloat}
     vectors::Matrix{T}
     distance::D
+end
+
+
+Base.show(io::IO, cq::CoarseQuantizer{D,T}) where {D,T} = begin
+    nrows, nclusters = size(cq.vectors)
+    print(io, "CoarseQuantizer{$D,$T}, $nrows×$nclusters cluster centres")
 end
 
 
@@ -81,7 +87,8 @@ Base.size(ivfadc::IVFADCIndex, i::Int) = size(ivfadc)[i]
 Base.show(io::IO, ivfadc::IVFADCIndex{U,I,Dc,Dr,T}) where {U,I,Dc,Dr,T} = begin
     nvars, nvectors = size(ivfadc)
     nc = size(ivfadc.coarse_quantizer.vectors, 2)
-    print(io, "IVFADC Index $nvars×$nvectors $T vectors, $nc clusters, $U codes, $I indexes")
+    codesize = 8 * (sizeof(U) * length(ivfadc.residual_quantizer.codebooks) + sizeof(I))
+    print(io, "IVFADCIndex{$U,$I,$Dc,$Dr,$T} $codesize-bit codes, $nvectors vectors")
 end
 
 
@@ -225,11 +232,11 @@ function knn_search(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
     neighbors = SortedMultiDict{T,I}()
     maxdist = zero(T)
     difftables = Vector{LittleDict{U,T}}(undef, m)
-    for (j, cl) in enumerate(closest_clusters)
-        dc = coarse_distances[cl]
+    @inbounds for j = eachindex(closest_clusters)
+        dc = coarse_distances[closest_clusters[j]]
         # Calculate all residual distances
         # (between the vector and the codebooks of the residual quantizer)
-        for i in 1:m
+        for i = eachindex(difftables)
             rr = QuantizedArrays.rowrange(n, m, i)
             diffs = colwise(cq_distance, rq_cbooks[i].vectors, residuals[rr, j])
             difftables[i] = LittleDict{U,T}(rq_cbooks[i].codes, diffs)
@@ -237,18 +244,19 @@ function knn_search(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
         # Loop through the iverted list and calculate
         # the actual (quantized) distances through lookup;
         # use SortedMultiDict as a maxheap for `k` neighbors
-        ivlist = ivfadc.inverse_index[cl]
-        for (id, code) in zip(ivlist.idxs, ivlist.codes)
+        ivlist = ivfadc.inverse_index[closest_clusters[j]]
+        for i = eachindex(ivlist.idxs)
             d = dc
-            for (i, c) in enumerate(code)
-                d += difftables[i][c]
+            @simd for ii = eachindex(ivlist.codes[i])
+                # add difference vector for the ii'th code of the i'th subquantizer
+                d += difftables[ii][ivlist.codes[i][ii]]
             end
             if length(neighbors) < k
-                push!(neighbors, d=>id)
+                push!(neighbors, d => ivlist.idxs[i])
                 maxdist, _ = last(neighbors)
             elseif maxdist > d
                 delete!((neighbors, lastindex(neighbors)))  # delete the max key
-                push!(neighbors, d=>id)
+                push!(neighbors, d => ivlist.idxs[i])
                 maxdist, _ = last(neighbors)
             end
         end
