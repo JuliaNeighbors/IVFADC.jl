@@ -43,7 +43,7 @@ ivfadc = IVFADCIndex(data,
                      quantization_distance=SqEuclidean(),
                      quantization_method=:pq,
                      index_type=UInt16)
-# IVFADC Index 50×1000 Float32 vectors, 100 clusters, UInt8 codes, UInt16 indexes
+# IVFADCIndex{UInt8,UInt16,SqEuclidean,SqEuclidean,Float32} 12-byte encoding, 1000 vectors
 ```
 
 ### Add and delete points to the index

@@ -6,16 +6,12 @@ CurrentModule=IVFADC
 
 `IVFADC` implements an inverted file system with asymmetric distance computation for fast approximate nearest neighbor search in large i.e. billion-scale, high dimensional datasets.
 
-!!! warning
-
-    This package is under heavy development and should not be used at this point in production systems.
-
-
 ## Implemented features
- - building the index
- - adding files to the index
- - removing files from the index
- - searching into the index
+ - building the index: the outer constructor `IVFADCIndex`
+ - adding points to the index: `push!`, `pushfirst!`
+ - removing points from the index: `pop!`, `popfirst!`, `delete_from_index!`
+ - searching into the index: `knn_search`
+ - saving/loading the index to/from disk: `save_ivfadc_index`, `load_ivfadc_index`
 
 ## Installation
 
