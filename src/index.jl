@@ -87,8 +87,8 @@ Base.size(ivfadc::IVFADCIndex, i::Int) = size(ivfadc)[i]
 Base.show(io::IO, ivfadc::IVFADCIndex{U,I,Dc,Dr,T}) where {U,I,Dc,Dr,T} = begin
     nvars, nvectors = size(ivfadc)
     nc = size(ivfadc.coarse_quantizer.vectors, 2)
-    codesize = 8 * (sizeof(U) * length(ivfadc.residual_quantizer.codebooks) + sizeof(I))
-    print(io, "IVFADCIndex{$U,$I,$Dc,$Dr,$T} $codesize-bit codes, $nvectors vectors")
+    codesize = sizeof(U) * length(ivfadc.residual_quantizer.codebooks) + sizeof(I)
+    print(io, "IVFADCIndex{$U,$I,$Dc,$Dr,$T} $codesize-byte codes, $nvectors vectors")
 end
 
 
