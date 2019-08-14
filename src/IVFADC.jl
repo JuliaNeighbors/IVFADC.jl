@@ -13,10 +13,13 @@ import Base: push!, pushfirst!, pop!, popfirst!
 
 export IVFADCIndex,
        delete_from_index!,
-       knn_search
+       knn_search,
+       save_ivfadc_index,
+       load_ivfadc_index
 
 include("defaults.jl")
 include("index.jl")
 include("utils.jl")
+include("persistency.jl")
 
 end # module

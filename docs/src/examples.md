@@ -10,12 +10,16 @@ ivfadc = IVFADCIndex(data, kc=5, k=8, m=2, index_type=UInt8)
 ```
 
 ## Searching the index
-Searching into the index is done with `knn_search`
+Searching into the index is done with `knn_search` for multiple queries
+```@repl index
+points = [rand(10) for _ in 1:3];
+idxs, dists = knn_search(ivfadc, points, 5)
+```
+as well as single queries
 ```@repl index
 point = data[:, 55];
 idxs, dists = knn_search(ivfadc, point, 5)
 ```
-
 Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based
 neighbor indexes that correspond to indexes in `data`, a simple transform
 has to be performed:
@@ -23,7 +27,7 @@ has to be performed:
 int_idxs = Int.(idxs) .+ 1
 ```
 
-Results may vary depending on how many clusters are being used to search into
+Results may vary depending on how many clusters are being used to search into, option configurable through the keyword argument `w` of `knn_search`
 ```@repl index
 knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
 ```

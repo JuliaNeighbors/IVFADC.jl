@@ -1,21 +1,21 @@
 # Functions that shift the indexes of the points in an inverted index
 function _shift_up_inverse_index!(inverse_index::InvertedIndex{I,U}, by::I=one(I)) where{I,U}
-    for (cl, ivlist) in enumerate(inverse_index)
-        ivlist.idxs .+= by
+    @inbounds @simd for i = eachindex(inverse_index)
+        inverse_index[i].idxs .+= by
     end
 end
 
 
 function _shift_down_inverse_index!(inverse_index::InvertedIndex{I,U}, by::I=one(I)) where{I,U}
-    for (cl, ivlist) in enumerate(inverse_index)
-        ivlist.idxs .-= by
+    @inbounds @simd for i = eachindex(inverse_index)
+        inverse_index[i].idxs .-= by
     end
 end
 
 
-function _shift_inverse_index!(inverse_index::InvertedIndex{I,U}, point::I) where{I,U}
-    for (cl, ivlist) in enumerate(inverse_index)
-        ivlist.idxs[ivlist.idxs .> point] .-= one(I)
+function _shift_inverse_index!(inverse_index::InvertedIndex{I,U}, point::I, by::I=one(I)) where{I,U}
+    @inbounds @simd for i = eachindex(inverse_index)
+        inverse_index[i].idxs[inverse_index[i].idxs .> point] .-= by
     end
 end
 
@@ -46,11 +46,11 @@ function _pop!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
     idx = 0      # index in inverted list
     (idxtopop, shift) = I.(ifelse(position==:last, (length(ivfadc)-1, 0), (0, 1)))
     local point_codes
-    for (cl, ivlist) in enumerate(ivfadc.inverse_index)
-        if idxtopop in ivlist.idxs
-            cluster = cl
-            idx = findfirst(isequal(idxtopop), ivlist.idxs)
-            point_codes = ivlist.codes[idx]
+    @inbounds for i = eachindex(ivfadc.inverse_index)
+        if idxtopop in ivfadc.inverse_index[i].idxs
+            cluster = i
+            idx = findfirst(isequal(idxtopop), ivfadc.inverse_index[i].idxs)
+            point_codes = ivfadc.inverse_index[i].codes[idx]
         end
     end
 
@@ -90,11 +90,11 @@ function delete_from_index!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
                             points::Vector{<:Integer}) where{U,I,Dc,Dr,T}
     shifted_points = I.(points .- 1)  # shift points
     for point in sort(unique(shifted_points), rev=true)
-        for (cl, ivlist) in enumerate(ivfadc.inverse_index)
-            if point in ivlist.idxs
-                pidx = findfirst(isequal(point), ivlist.idxs)
-                deleteat!(ivlist.idxs, pidx)
-                deleteat!(ivlist.codes, pidx)
+        @inbounds for i = eachindex(ivfadc.inverse_index)
+            if point in ivfadc.inverse_index[i].idxs
+                pidx = findfirst(isequal(point), ivfadc.inverse_index[i].idxs)
+                deleteat!(ivfadc.inverse_index[i].idxs, pidx)
+                deleteat!(ivfadc.inverse_index[i].codes, pidx)
                 _shift_inverse_index!(ivfadc.inverse_index, point)
                 break
             end
