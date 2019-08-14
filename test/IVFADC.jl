@@ -93,15 +93,21 @@ end
 @testset "knn_search" begin
     INDEX_TYPE = UInt32
     ivfadc = build_index_random_data(;index_type=INDEX_TYPE)
-    # Search single vector
+
+    # Single query
     K = 3  # number of neighbors
     query = rand(nrows)
     idxs, dists = knn_search(ivfadc, query, K, w=2)
     @test idxs isa Vector{INDEX_TYPE}
     @test dists isa Vector{eltype(query)}
-
     @test_throws AssertionError knn_search(ivfadc, query, 0)
     @test_throws AssertionError knn_search(ivfadc, query, 1, w=0)
+
+    # Multiple queries
+    queries = [rand(nrows) for _ in 1:10]
+    idxs, dists = knn_search(ivfadc, queries, K, w=2)
+    @test idxs isa Vector{Vector{INDEX_TYPE}}
+    @test dists isa Vector{Vector{eltype(query)}}
 end
 
 

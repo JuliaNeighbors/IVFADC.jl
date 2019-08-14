@@ -88,7 +88,7 @@ Base.show(io::IO, ivfadc::IVFADCIndex{U,I,Dc,Dr,T}) where {U,I,Dc,Dr,T} = begin
     nvars, nvectors = size(ivfadc)
     nc = size(ivfadc.coarse_quantizer.vectors, 2)
     codesize = sizeof(U) * length(ivfadc.residual_quantizer.codebooks) + sizeof(I)
-    print(io, "IVFADCIndex{$U,$I,$Dc,$Dr,$T} $codesize-byte codes, $nvectors vectors")
+    print(io, "IVFADCIndex{$U,$I,$Dc,$Dr,$T} $codesize-byte encoding, $nvectors vectors")
 end
 
 
@@ -262,4 +262,19 @@ function knn_search(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
         end
     end
     return collect(values(neighbors)), collect(keys(neighbors))
+end
+
+
+function knn_search(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
+                    points::Vector{Vector{T}},
+                    k::Int;
+                    w::Int=1
+                   ) where {U,I,Dc,Dr,T}
+    n = length(points)
+    idxs = Vector{Vector{I}}(undef, n)
+    dists = Vector{Vector{T}}(undef, n)
+    for i = eachindex(points)  # Threads.@threads for i = ... for multi-threading
+        idxs[i], dists[i] = knn_search(ivfadc, points[i], k, w=w)
+    end
+    return idxs, dists
 end
