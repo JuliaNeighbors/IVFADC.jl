@@ -7,17 +7,17 @@ julia&gt; ivfadc = IVFADCIndex(data, kc=5, k=8, m=2, index_type=UInt8)
 IVFADCIndex{UInt8,UInt8,Distances.SqEuclidean,Distances.SqEuclidean,Float64} 3-byte encoding, 100 vectors</code></pre><h2><a class="nav-anchor" id="Searching-the-index-1" href="#Searching-the-index-1">Searching the index</a></h2><p>Searching into the index is done with <code>knn_search</code> for multiple queries</p><pre><code class="language-julia-repl">julia&gt; points = [rand(10) for _ in 1:3];
 
 julia&gt; idxs, dists = knn_search(ivfadc, points, 5)
-(Array{UInt8,1}[[0x52, 0x3b, 0x3e, 0x17, 0x1b], [0x5b, 0x0f, 0x46, 0x1d, 0x3c], [0x4e, 0x5d, 0x26, 0x2d, 0x11]], Array{Float64,1}[[0.852293, 1.03265, 1.21808, 1.26403, 1.26403], [0.735308, 0.797884, 1.04417, 1.07534, 1.07534], [0.424373, 0.464334, 0.493888, 0.493888, 0.521422]])</code></pre><p>as well as single queries</p><pre><code class="language-julia-repl">julia&gt; point = data[:, 55];
+(Array{UInt8,1}[[0x22, 0x21, 0x1f, 0x36, 0x0f], [0x1b, 0x28, 0x37, 0x00, 0x47], [0x28, 0x37, 0x1b, 0x00, 0x30]], Array{Float64,1}[[0.902123, 0.967483, 1.10812, 1.14844, 1.17379], [0.962603, 1.0502, 1.0502, 1.18197, 1.21356], [0.887532, 0.887532, 0.983973, 1.232, 1.6022]])</code></pre><p>as well as single queries</p><pre><code class="language-julia-repl">julia&gt; point = data[:, 55];
 
 julia&gt; idxs, dists = knn_search(ivfadc, point, 5)
-(UInt8[0x36, 0x07, 0x45, 0x50, 0x10], [1.11172, 1.35334, 1.45173, 1.60356, 1.6566])</code></pre><p>Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based neighbor indexes that correspond to indexes in <code>data</code>, a simple transform has to be performed:</p><pre><code class="language-julia-repl">julia&gt; int_idxs = Int.(idxs) .+ 1
+(UInt8[0x36, 0x56, 0x4c, 0x17, 0x1f], [0.539899, 0.679647, 0.684339, 0.73381, 0.746872])</code></pre><p>Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based neighbor indexes that correspond to indexes in <code>data</code>, a simple transform has to be performed:</p><pre><code class="language-julia-repl">julia&gt; int_idxs = Int.(idxs) .+ 1
 5-element Array{Int64,1}:
  55
-  8
- 70
- 81
- 17</code></pre><p>Results may vary depending on how many clusters are being used to search into, option configurable through the keyword argument <code>w</code> of <code>knn_search</code></p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
-(UInt8[0x36, 0x07, 0x45, 0x50, 0x10], [1.11172, 1.35334, 1.45173, 1.60356, 1.6566])</code></pre><h2><a class="nav-anchor" id="Updating-the-index-1" href="#Updating-the-index-1">Updating the index</a></h2><p>Adding and removing points to and from the index is done with <code>push!</code>, <code>pop!</code>, <code>pushfirst!</code> and <code>popfirst!</code> methods. As they imply, point can be added (and quantized) or removed (and reconstructed) at the beginning or end of the index. In practice, this implies updating the point indexes in the index, if the case.</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
+ 87
+ 77
+ 24
+ 32</code></pre><p>Results may vary depending on how many clusters are being used to search into, option configurable through the keyword argument <code>w</code> of <code>knn_search</code></p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
+(UInt8[0x36, 0x56, 0x4c, 0x17, 0x1f], [0.539899, 0.679647, 0.684339, 0.73381, 0.746872])</code></pre><h2><a class="nav-anchor" id="Updating-the-index-1" href="#Updating-the-index-1">Updating the index</a></h2><p>Adding and removing points to and from the index is done with <code>push!</code>, <code>pop!</code>, <code>pushfirst!</code> and <code>popfirst!</code> methods. As they imply, point can be added (and quantized) or removed (and reconstructed) at the beginning or end of the index. In practice, this implies updating the point indexes in the index, if the case.</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
            push!(ivfadc, rand(10))
        end
 
@@ -26,39 +26,39 @@ IVFADCIndex{UInt8,UInt8,Distances.SqEuclidean,Distances.SqEuclidean,Float64} 3-b
 
 julia&gt; pop!(ivfadc)
 10-element Array{Float64,1}:
- 0.34154163628782747
- 0.26359482384770705
- 0.30701441763738374
- 0.19531538008610883
- 0.4984932179995051
- 0.48192898677211304
- 0.4839319288629518
- 0.24799204614468606
- 0.29227577582334757
- 0.12377832661558519
+ 0.6202601466489253
+ 0.5566815514379718
+ 0.2514045850878308
+ 0.6014132043384489
+ 0.8011253674690959
+ 0.1940623912294595
+ 0.14443818686855653
+ 0.5944314036104829
+ 0.7145293650796131
+ 0.3930208419694566
 
 julia&gt; pushfirst!(ivfadc, 0.1*collect(1:10))
 
 julia&gt; popfirst!(ivfadc)
 10-element Array{Float64,1}:
- 0.16976288845988016
- 0.3663161713505707
- 0.5994561144836131
- 0.5226351206478399
- 0.5696612959653866
- 0.2421887116113664
- 0.5736364834542257
- 0.8621331153149411
- 0.8350563978302591
- 0.776816772255184</code></pre><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>When adding a new point, its index will always be the number of already existing points. When deleting points, the indexes of all points are updated so that they are consecutive.</p></div></div><p>The function <code>delete_from_index!</code> removes the points indicated in the vector of indexes.</p><pre><code class="language-julia-repl">julia&gt; delete_from_index!(ivfadc, [10, 21, 32]);
+ 0.06054615038585126
+ 0.15644374782252266
+ 0.43002887478974017
+ 0.5355325680144108
+ 0.18318967319621393
+ 0.5821127939184141
+ 0.7278395248432945
+ 0.5641470397479411
+ 0.8806947698057787
+ 1.0058363412900904</code></pre><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>When adding a new point, its index will always be the number of already existing points. When deleting points, the indexes of all points are updated so that they are consecutive.</p></div></div><p>The function <code>delete_from_index!</code> removes the points indicated in the vector of indexes.</p><pre><code class="language-julia-repl">julia&gt; delete_from_index!(ivfadc, [10, 21, 32]);
 
 julia&gt; ivfadc
 IVFADCIndex{UInt8,UInt8,Distances.SqEuclidean,Distances.SqEuclidean,Float64} 3-byte encoding, 101 vectors</code></pre><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>Deleting from the index is a slow operation as the all indexes of the points contained need to be properly updated depending on the positions of the points that are being deleted.</p></div></div><h2><a class="nav-anchor" id="Limits-and-advanced-usage-of-the-index-1" href="#Limits-and-advanced-usage-of-the-index-1">Limits and advanced usage of the index</a></h2><p>It is not possible to add more points than the maximum value of the indexing type</p><pre><code class="language-julia-repl">julia&gt; ivfadc = IVFADCIndex(rand(2,256), kc=2, k=16, m=1, index_type=UInt8)
 IVFADCIndex{UInt8,UInt8,Distances.SqEuclidean,Distances.SqEuclidean,Float64} 2-byte encoding, 256 vectors</code></pre><p>Adding a new point to an index that already has 256 points (which is the maximum for the <code>UInt8</code>) throws an error</p><pre><code class="language-julia-repl">julia&gt; push!(ivfadc, rand(2))
 ERROR: AssertionError: Cannot index, exceeding index capacity of 256 points</code></pre><p>It is however possible to add the point after deleting another one</p><pre><code class="language-julia-repl">julia&gt; popfirst!(ivfadc)
 2-element Array{Float64,1}:
- 0.06682200497201349
- 0.37003285203811803
+ 0.0829047956012324
+ 0.3472631736228926
 
 julia&gt; push!(ivfadc, rand(2))
 
