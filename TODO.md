@@ -1,2 +1,2 @@
-- Add paralellism support (via threading)
+- Add paralellism support (via threading, separate branch)
 - Implement IVFOADC (hnsw coarse search + optimizations)

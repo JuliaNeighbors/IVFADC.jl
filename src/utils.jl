@@ -44,19 +44,19 @@ function _pop!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
     @assert length(ivfadc) > 0 "Cannot pop element from empty index"
     cluster = 0  # cluster with max index
     idx = 0      # index in inverted list
-    (idxtopop, shift) = I.(ifelse(position==:last, (length(ivfadc)-1, 0), (0, 1)))
+    (vecid, shift) = I.(ifelse(position==:last, (length(ivfadc)-1, 0), (0, 1)))
     local point_codes
     @inbounds for i = eachindex(ivfadc.inverse_index)
-        if idxtopop in ivfadc.inverse_index[i].idxs
+        if vecid in ivfadc.inverse_index[i].idxs
             cluster = i
-            idx = findfirst(isequal(idxtopop), ivfadc.inverse_index[i].idxs)
+            idx = findfirst(isequal(vecid), ivfadc.inverse_index[i].idxs)
             point_codes = ivfadc.inverse_index[i].codes[idx]
         end
     end
 
     # Get point
     reconstructed = ivfadc.coarse_quantizer.vectors[:, cluster] +
-                    _decode(ivfadc.residual_quantizer, point_codes)
+                    _decode_point(ivfadc.residual_quantizer, point_codes)
 
     # Delete index data
     deleteat!(ivfadc.inverse_index[cluster].idxs, idx)
@@ -68,8 +68,9 @@ function _pop!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
 end
 
 
-function _decode(quantizer::QuantizedArrays.OrthogonalQuantizer{U,Dr,T,2}, codes::Vector{U}
-                ) where{U,Dr,T}
+function _decode_point(quantizer::QuantizedArrays.OrthogonalQuantizer{U,Dr,T,2},
+                       codes::Vector{U}
+                      ) where{U,Dr,T}
     m, n = length(quantizer.codebooks), quantizer.dims[1]
     residual = Vector{T}(undef, n)
     @inbounds for i in 1:m
@@ -87,7 +88,8 @@ Deletes the points with indices contained in `points` from
 the index `ivfadc`.
 """
 function delete_from_index!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
-                            points::Vector{<:Integer}) where{U,I,Dc,Dr,T}
+                            points::Vector{<:Integer}
+                           ) where{U,I,Dc,Dr,T}
     shifted_points = I.(points .- 1)  # shift points
     for point in sort(unique(shifted_points), rev=true)
         @inbounds for i = eachindex(ivfadc.inverse_index)
@@ -124,14 +126,15 @@ pushfirst!(ivfadc, point) = _push!(ivfadc, point, :first)
 # Utility function for pushing
 function _push!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
                 point::Vector{T},
-                position::Symbol) where{U,I,Dc,Dr,T}
+                position::Symbol
+               ) where{U,I,Dc,Dr,T}
     # Checks and initializations
     nrows, nvectors = size(ivfadc)
     @assert nrows == length(point) "Adding to index requires $nrows-element vectors"
     @assert QuantizedArrays.TYPE_TO_BITS[I] >=
         log2(nvectors+1) "Cannot index, exceeding index capacity of $(Int(typemax(I)+1)) points"
 
-    qpoint, mincluster = _quantize_point(ivfadc, point)
+    qpoint, mincluster = _encode_point(ivfadc, point)
 
     # Insert in the inverted list corresponding to the cluster
     (vecid, shift) = ifelse(position == :first, (0, one(I)), (nvectors, zero(I)))
@@ -142,7 +145,7 @@ function _push!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
 end
 
 
-function _quantize_point(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
+function _encode_point(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
                          point::Vector{T}
                         ) where{U,I,Dc,Dr,T}
     nrows, nvectors = size(ivfadc)

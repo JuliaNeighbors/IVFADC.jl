@@ -1,4 +1,5 @@
-function save_ivfadc_index(filename::AbstractString, ivfadc::IVFADCIndex{U,I,Dc,Dr,T}
+function save_ivfadc_index(filename::AbstractString,
+                           ivfadc::IVFADCIndex{U,I,Dc,Dr,T}
                           ) where {U,I,Dc,Dr,T}
     open(filename, "w") do fid
         # Initialize all variables needed to write

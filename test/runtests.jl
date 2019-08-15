@@ -4,6 +4,9 @@ using Test
 using IVFADC
 using Distances
 
-include("IVFADC.jl")
+include("index.jl")
+include("utils.jl")
+include("search.jl")
+include("persistency.jl")
 
 end
