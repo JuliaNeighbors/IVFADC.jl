@@ -1,6 +1,6 @@
 function save_ivfadc_index(filename::AbstractString,
-                           ivfadc::IVFADCIndex{U,I,Dc,Dr,T}
-                          ) where {U,I,Dc,Dr,T}
+                           ivfadc::IVFADCIndex{U,I,Dc,Dr,T,Q}
+                          ) where {U,I,Dc,Dr,T,Q<:NaiveQuantizer}
     open(filename, "w") do fid
         # Initialize all variables needed to write
         nrows, nclusters = size(ivfadc.coarse_quantizer.vectors)
@@ -84,7 +84,7 @@ function load_ivfadc_index(filename::AbstractString)
         for i in 1:nclusters
             data[:,i] = collect(reinterpret(T, read(fid, binary_length)))
         end
-        coarse_quantizer = IVFADC.CoarseQuantizer(data, Dc())
+        coarse_quantizer = IVFADC.NaiveQuantizer{Dc, eltype(data)}(data)
 
         # Read residual quantizer
         cbooks = Vector{CodeBook{U,T}}(undef, m)
@@ -120,3 +120,13 @@ function load_ivfadc_index(filename::AbstractString)
         return IVFADCIndex(coarse_quantizer, residual_quantizer, inverse_index)
     end
 end
+
+
+function save_ivfadc_index(filename::AbstractString,
+                           ivfadc::IVFADCIndex{U,I,Dc,Dr,T,Q}
+                          ) where {U,I,Dc,Dr,T,Q<:HNSWQuantizer}
+    #TODO(Corneliu): Implement saving the HNSW object
+    throw(ErrorException("The IVFADCIndex with HNSW coarse quantizer cannot be saved to disk."))
+end
+
+#TODO(Corneliu): Implement loading HNSW-coarse quantizer based IVFADC indexes

@@ -1,6 +1,5 @@
-#=
-@testset "Persistency: save/load_ivfadc_index" begin
-    ivfadc = build_index_random_data()
+@testset "Persistency (naive coarse quantizer): save/load_ivfadc_index" begin
+    ivfadc = build_index_random_data(coarse_quantizer=:naive)
     filepath, io = mktemp()
 
     # write to disk
@@ -13,7 +12,6 @@
         @test typeof(ivfadc) == typeof(ivfadc2)
         # coarse quantizer
         @test ivfadc.coarse_quantizer.vectors == ivfadc2.coarse_quantizer.vectors
-        @test ivfadc.coarse_quantizer.distance == ivfadc2.coarse_quantizer.distance
         # residual quantizer
         @test ivfadc.residual_quantizer.k== ivfadc2.residual_quantizer.k
         @test ivfadc.residual_quantizer.dims == ivfadc2.residual_quantizer.dims
@@ -35,4 +33,12 @@
         @test e
     end
 end
-=#
+
+
+@testset "Persistency (hnsw coarse quantizer): save_ivfadc_index fail" begin
+    ivfadc = build_index_random_data(coarse_quantizer=:hnsw)
+    filepath, io = mktemp()
+    # try to write to disk and test for failure
+    @test_throws ErrorException save_ivfadc_index(filepath, ivfadc)
+    rm(filepath, force=true, recursive=true)
+end
