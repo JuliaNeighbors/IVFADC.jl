@@ -38,9 +38,9 @@ popfirst!(ivfadc) = _pop!(ivfadc, :first)
 
 
 # Utility function for poping
-function _pop!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
+function _pop!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T,Q},
                position::Symbol=:last
-              ) where{U,I,Dc,Dr,T}
+              ) where{U,I,Dc,Dr,T,Q}
     @assert length(ivfadc) > 0 "Cannot pop element from empty index"
     cluster = 0  # cluster with max index
     idx = 0      # index in inverted list
@@ -55,8 +55,8 @@ function _pop!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
     end
 
     # Get point
-    reconstructed = ivfadc.coarse_quantizer.vectors[:, cluster] +
-                    _decode_point(ivfadc.residual_quantizer, point_codes)
+    reconstructed = _get_quantizer_vector(ivfadc.coarse_quantizer, cluster) +
+                        _decode_point(ivfadc.residual_quantizer, point_codes)
 
     # Delete index data
     deleteat!(ivfadc.inverse_index[cluster].idxs, idx)
@@ -87,9 +87,9 @@ end
 Deletes the points with indices contained in `points` from
 the index `ivfadc`.
 """
-function delete_from_index!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
+function delete_from_index!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T,Q},
                             points::Vector{<:Integer}
-                           ) where{U,I,Dc,Dr,T}
+                           ) where{U,I,Dc,Dr,T,Q}
     shifted_points = I.(points .- 1)  # shift points
     for point in sort(unique(shifted_points), rev=true)
         @inbounds for i = eachindex(ivfadc.inverse_index)
@@ -124,10 +124,10 @@ pushfirst!(ivfadc, point) = _push!(ivfadc, point, :first)
 
 
 # Utility function for pushing
-function _push!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
+function _push!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T,Q},
                 point::Vector{T},
                 position::Symbol
-               ) where{U,I,Dc,Dr,T}
+               ) where{U,I,Dc,Dr,T,Q}
     # Checks and initializations
     nrows, nvectors = size(ivfadc)
     @assert nrows == length(point) "Adding to index requires $nrows-element vectors"
@@ -145,19 +145,16 @@ function _push!(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
 end
 
 
-function _encode_point(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
-                         point::Vector{T}
-                        ) where{U,I,Dc,Dr,T}
+function _encode_point(ivfadc::IVFADCIndex{U,I,Dc,Dr,T,Q},
+                       point::Vector{T}
+                      ) where{U,I,Dc,Dr,T,Q}
     nrows, nvectors = size(ivfadc)
-    cq_distance = Dc()
-    cq_clcenters = ivfadc.coarse_quantizer.vectors
 
-    # Find belonging cluster
-    coarse_distances = colwise(cq_distance, cq_clcenters, point)
-    mincluster = argmin(coarse_distances)
+    # Find belonging cluster (first [1] for (idxs,dist), second for idxs array)
+    mincluster = coarse_search(ivfadc.coarse_quantizer, point, 1)[1][1]
 
     # Quantize residual
-    residual = point - ivfadc.coarse_quantizer.vectors[:, mincluster]
+    residual = point - _get_quantizer_vector(ivfadc.coarse_quantizer, mincluster)
     quantized_point = vec(QuantizedArrays.quantize_data(ivfadc.residual_quantizer,
                             reshape(residual, nrows, 1)))
     return quantized_point, mincluster

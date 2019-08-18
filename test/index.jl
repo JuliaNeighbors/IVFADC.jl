@@ -2,7 +2,8 @@ const nvectors = 243
 const nrows = 10
 
 
-function build_index_random_data(;index_type=UInt32)
+function build_index_random_data(;coarse_quantizer=:naive,
+                                 index_type=UInt32)
     data = rand(nrows, nvectors)
     kc = 100    # number of coarse quantizer vectors
     k = 16     # quantization levels (for residuals)
@@ -16,6 +17,7 @@ function build_index_random_data(;index_type=UInt32)
     # Build index
     ivfadc = IVFADCIndex(data,
                          kc=kc, k=k, m=m,
+                         coarse_quantizer=coarse_quantizer,
                          coarse_distance=coarse_distance,
                          quantization_distance=quantization_distance,
                          quantization_method=quantization_method,
@@ -27,12 +29,14 @@ end
 
 
 @testset "Index: IVFADCIndex" begin
-    ivfadc =  build_index_random_data()
-    @test ivfadc isa IVFADCIndex
+    for coarse_quantizer in [:naive, :hnsw]
+        ivfadc =  build_index_random_data(coarse_quantizer=coarse_quantizer)
+        @test ivfadc isa IVFADCIndex
 
-    data = rand(2, 300)
-    @test_throws AssertionError IVFADCIndex(data, kc=1, k=2, m=1)    # kc fail
-    @test_throws AssertionError IVFADCIndex(data, kc=2, k=301, m=1)  # k fail
-    @test_throws AssertionError IVFADCIndex(data, kc=2, k=300, m=3)  # m fail
-    @test_throws AssertionError IVFADCIndex(data, index_type=UInt8)  # index_type fail
+        data = rand(2, 300)
+        @test_throws AssertionError IVFADCIndex(data, kc=1, k=2, m=1)    # kc fail
+        @test_throws AssertionError IVFADCIndex(data, kc=2, k=301, m=1)  # k fail
+        @test_throws AssertionError IVFADCIndex(data, kc=2, k=300, m=3)  # m fail
+        @test_throws AssertionError IVFADCIndex(data, index_type=UInt8)  # index_type fail
+    end
 end

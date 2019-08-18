@@ -6,12 +6,14 @@ neighbors will be searched.
 abstract type AbstractCoarseQuantizer{D,T} end
 
 
+# Naive coarse quantizer
 """
     NaiveQuantizer{D<:Distances.PreMetric, T<:AbstractFloat}
 
-Coarse quantization structure. The `vector` fields contains the
-coarse vectors while `distance` contains the distance that is
-used to calculate the distance from a point to the coarse vectors.
+Coarse quantization structure based on brute force search.
+The `vector` fields contains the coarse vectors while `distance`
+contains the distance that is used to calculate the distance
+from a point to the coarse vectors.
 """
 struct NaiveQuantizer{D<:Distances.PreMetric, T<:AbstractFloat} <: AbstractCoarseQuantizer{D,T}
     vectors::Matrix{T}
@@ -43,6 +45,16 @@ _closest_cluster_residuals(cq::NaiveQuantizer{D,T},
 end
 
 
+_get_quantizer_vector(cq::NaiveQuantizer, idx::Int) = cq.vectors[:, idx]
+
+
+# HNSW coarse quantizer
+"""
+    HNSWQuantizer{U<:Unsigned, V<:Vector{Vector{T}}, D<:Distances.PreMetric, T<:AbstractFloat}
+
+Coarse quantization structure based on HNSW search structure.
+The `hnsw` field contains the coarse vectors.
+"""
 struct HNSWQuantizer{U, V, D<:Distances.PreMetric, T<:AbstractFloat} <: AbstractCoarseQuantizer{D,T}
     hnsw::HierarchicalNSW{U,T,V,D}
 end
@@ -75,3 +87,6 @@ _closest_cluster_residuals(cq::HNSWQuantizer{U,V,D,T},
     end
     return residuals
 end
+
+
+_get_quantizer_vector(cq::HNSWQuantizer, idx::Int) = cq.hnsw.data[idx]
