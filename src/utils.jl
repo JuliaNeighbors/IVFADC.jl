@@ -149,7 +149,7 @@ function _encode_point(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
                          point::Vector{T}
                         ) where{U,I,Dc,Dr,T}
     nrows, nvectors = size(ivfadc)
-    cq_distance = ivfadc.coarse_quantizer.distance
+    cq_distance = Dc()
     cq_clcenters = ivfadc.coarse_quantizer.vectors
 
     # Find belonging cluster

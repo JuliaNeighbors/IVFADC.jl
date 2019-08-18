@@ -8,8 +8,10 @@ using DataStructures
 using Distances
 using Clustering
 using QuantizedArrays
+using HNSW
 
 import Base: push!, pushfirst!, pop!, popfirst!
+import HNSW: knn_search
 
 export IVFADCIndex,
        delete_from_index!,
@@ -18,6 +20,7 @@ export IVFADCIndex,
        load_ivfadc_index
 
 include("defaults.jl")
+include("coarsequantizers.jl")
 include("index.jl")
 include("utils.jl")
 include("persistency.jl")
