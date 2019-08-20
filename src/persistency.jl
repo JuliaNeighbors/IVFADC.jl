@@ -10,6 +10,7 @@ function save_ivfadc_index(filename::AbstractString,
         d = size(ivfadc.residual_quantizer.codebooks[1].vectors, 1)
 
         # Get types
+        coarsequanttype_str = "NaiveQuantizer"
         quanttype_str = string(typeof(ivfadc.residual_quantizer.quantization))
         quanteltype_str = string(U)
         indextype_str = string(I)
@@ -20,6 +21,7 @@ function save_ivfadc_index(filename::AbstractString,
         # Start writing text information
         println(fid, "$nrows $nclusters")
         println(fid, "$n $m $k $d")
+        println(fid, "$coarsequanttype_str")
         println(fid, "$quanttype_str")
         println(fid, "$quanteltype_str")
         println(fid, "$indextype_str")
@@ -55,36 +57,33 @@ function save_ivfadc_index(filename::AbstractString,
     end
 end
 
-_get_module_and_symbol(line) = begin
+
+_read_type_from_line(line) = begin
     if occursin('.', line)
-        return String.(split(line, "."))
+        _module, _type = String.(split(line, "."))
     else
-        return @__MODULE__, line
+        _module, _type = string(@__MODULE__), line
     end
+    return eval(Expr(:., Symbol(_module), QuoteNode(Symbol(_type))))
 end
+
 
 # Generate a WordVectors object from binary file
 function load_ivfadc_index(filename::AbstractString)
     open(filename, "r") do fid
         nrows, nclusters = map(x -> parse(Int, x), split(readline(fid), ' '))
         n, m, k, d = map(x -> parse(Int, x), split(readline(fid), ' '))
-        _module, _val = split(readline(fid), ".")
-        Q = eval(Expr(:., Symbol(_module), QuoteNode(Symbol(_val))))
+        CQ = _read_type_from_line(readline(fid))
+        Q = _read_type_from_line(readline(fid))
         U = eval(Symbol(readline(fid)))
         I = eval(Symbol(readline(fid)))
-        _module, _val = _get_module_and_symbol(readline(fid))
-        Dc = eval(Expr(:., Symbol(_module), QuoteNode(Symbol(_val))))
-        _module, _val = _get_module_and_symbol(readline(fid))
-        Dr = eval(Expr(:., Symbol(_module), QuoteNode(Symbol(_val))))
+        Dc = _read_type_from_line(readline(fid))
+        Dr = _read_type_from_line(readline(fid))
         T = eval(Symbol(readline(fid)))
 
         # Read coarse quantizer
-        data = Matrix{T}(undef, nrows, nclusters)
-        binary_length = sizeof(T) * nrows
-        for i in 1:nclusters
-            data[:,i] = collect(reinterpret(T, read(fid, binary_length)))
-        end
-        coarse_quantizer = IVFADC.NaiveQuantizer{Dc, eltype(data)}(data)
+        coarse_quantizer = _load_coarse_quantizer(CQ, fid;
+                                dims=(nrows, nclusters), disttype=Dc, vectype=T)
 
         # Read residual quantizer
         cbooks = Vector{CodeBook{U,T}}(undef, m)
@@ -98,6 +97,7 @@ function load_ivfadc_index(filename::AbstractString)
             end
             cbooks[i] = CodeBook(codes, vectors)
         end
+        binary_length = sizeof(T) * nrows
         rotmat = Matrix{T}(undef, nrows, nrows)
         for i in 1:nrows
             rotmat[:,i] = collect(reinterpret(T, read(fid, binary_length)))
@@ -122,6 +122,21 @@ function load_ivfadc_index(filename::AbstractString)
 end
 
 
+function _load_coarse_quantizer(::Type{CQ}, fid::IO;
+                                dims=(0,0),
+                                disttype::Type{Dc}=typeof(DEFAULT_COARSE_DISTANCE),
+                                vectype::Type{T}=AbstractFloat,
+                                kwargs...) where {CQ<:NaiveQuantizer,Dc,T}
+    nrows, nclusters = dims
+    data = Matrix{T}(undef, nrows, nclusters)
+    binary_length = sizeof(T) * nrows
+    for i in 1:nclusters
+        data[:,i] = collect(reinterpret(T, read(fid, binary_length)))
+    end
+    coarse_quantizer = IVFADC.NaiveQuantizer{Dc,T}(data)
+end
+
+
 function save_ivfadc_index(filename::AbstractString,
                            ivfadc::IVFADCIndex{U,I,Dc,Dr,T,Q}
                           ) where {U,I,Dc,Dr,T,Q<:HNSWQuantizer}
@@ -129,4 +144,7 @@ function save_ivfadc_index(filename::AbstractString,
     throw(ErrorException("The IVFADCIndex with HNSW coarse quantizer cannot be saved to disk."))
 end
 
-#TODO(Corneliu): Implement loading HNSW-coarse quantizer based IVFADC indexes
+
+function _load_coarse_quantizer(::Type{CQ}, fid::IO) where {CQ<:HNSWQuantizer}
+    throw(ErrorException("The HNSW coarse quantizer cannot be loaded to disk."))
+end
