@@ -3,64 +3,68 @@
 
 julia&gt; data = rand(10, 100);  # 100 points, 10 dimensions
 
-julia&gt; ivfadc = IVFADCIndex(data, kc=5, k=8, m=2, index_type=UInt8)
-IVFADCIndex{UInt8,UInt8,Distances.SqEuclidean,Distances.SqEuclidean,Float64} 3-byte encoding, 100 vectors</code></pre><h2><a class="nav-anchor" id="Searching-the-index-1" href="#Searching-the-index-1">Searching the index</a></h2><p>Searching into the index is done with <code>knn_search</code> for multiple queries</p><pre><code class="language-julia-repl">julia&gt; points = [rand(10) for _ in 1:3];
+julia&gt; ivfadc = IVFADCIndex(data, kc=5, k=8, m=2)
+IVFADCIndex, naive coarse quantizer, 6-byte encoding (4 + 1×2), 100 Float64 vectors</code></pre><p>The coarse quantizer, used in the first level coarse neighbor search, can be specified using the <code>coarse_quantizer</code> keyword argument</p><pre><code class="language-julia-repl">julia&gt; ivfadc = IVFADCIndex(data, kc=5, k=8, m=2, coarse_quantizer=:hnsw)  # fast!
+IVFADCIndex, HNSW coarse quantizer, 6-byte encoding (4 + 1×2), 100 Float64 vectors
+
+julia&gt; ivfadc = IVFADCIndex(data, kc=5, k=8, m=2, coarse_quantizer=:naive) # simple
+IVFADCIndex, naive coarse quantizer, 6-byte encoding (4 + 1×2), 100 Float64 vectors</code></pre><p>The HNSW coarse quantizer is recommended is &#39;many&#39; clusters are being used and coarse search dominates search time as opposed to in-cluster search. </p><h2><a class="nav-anchor" id="Searching-the-index-1" href="#Searching-the-index-1">Searching the index</a></h2><p>Searching into the index is done with <code>knn_search</code> for multiple queries</p><pre><code class="language-julia-repl">julia&gt; points = [rand(10) for _ in 1:3];
 
 julia&gt; idxs, dists = knn_search(ivfadc, points, 5)
-(Array{UInt8,1}[[0x22, 0x21, 0x1f, 0x36, 0x0f], [0x1b, 0x28, 0x37, 0x00, 0x47], [0x28, 0x37, 0x1b, 0x00, 0x30]], Array{Float64,1}[[0.902123, 0.967483, 1.10812, 1.14844, 1.17379], [0.962603, 1.0502, 1.0502, 1.18197, 1.21356], [0.887532, 0.887532, 0.983973, 1.232, 1.6022]])</code></pre><p>as well as single queries</p><pre><code class="language-julia-repl">julia&gt; point = data[:, 55];
+(Array{UInt32,1}[[0x00000027, 0x0000004e, 0x0000002c, 0x0000001f, 0x0000004a], [0x00000004, 0x00000050, 0x00000061, 0x00000008, 0x00000031], [0x00000026, 0x00000011, 0x0000001e, 0x00000035, 0x00000041]], Array{Float64,1}[[0.914868, 0.914868, 0.960517, 1.10746, 1.19681], [0.755533, 0.91872, 0.91872, 0.935808, 0.938626], [1.72708, 1.79384, 1.79384, 1.81729, 1.90281]])</code></pre><p>as well as single queries</p><pre><code class="language-julia-repl">julia&gt; point = data[:, 55];
 
 julia&gt; idxs, dists = knn_search(ivfadc, point, 5)
-(UInt8[0x36, 0x56, 0x4c, 0x17, 0x1f], [0.539899, 0.679647, 0.684339, 0.73381, 0.746872])</code></pre><p>Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based neighbor indexes that correspond to indexes in <code>data</code>, a simple transform has to be performed:</p><pre><code class="language-julia-repl">julia&gt; int_idxs = Int.(idxs) .+ 1
+(UInt32[0x00000036, 0x00000016, 0x00000040, 0x00000055, 0x00000009], [0.334952, 0.448002, 0.448002, 0.556999, 0.626324])</code></pre><p>Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based neighbor indexes that correspond to indexes in <code>data</code>, a simple transform has to be performed:</p><pre><code class="language-julia-repl">julia&gt; int_idxs = Int.(idxs) .+ 1
 5-element Array{Int64,1}:
  55
- 87
- 77
- 24
- 32</code></pre><p>Results may vary depending on how many clusters are being used to search into, option configurable through the keyword argument <code>w</code> of <code>knn_search</code></p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
-(UInt8[0x36, 0x56, 0x4c, 0x17, 0x1f], [0.539899, 0.679647, 0.684339, 0.73381, 0.746872])</code></pre><h2><a class="nav-anchor" id="Updating-the-index-1" href="#Updating-the-index-1">Updating the index</a></h2><p>Adding and removing points to and from the index is done with <code>push!</code>, <code>pop!</code>, <code>pushfirst!</code> and <code>popfirst!</code> methods. As they imply, point can be added (and quantized) or removed (and reconstructed) at the beginning or end of the index. In practice, this implies updating the point indexes in the index, if the case.</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
+ 23
+ 65
+ 86
+ 10</code></pre><p>Results may vary depending on how many clusters are being used to search into, option configurable through the keyword argument <code>w</code> of <code>knn_search</code></p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
+(UInt32[0x00000036, 0x00000016, 0x00000040, 0x00000055, 0x00000009], [0.334952, 0.448002, 0.448002, 0.556999, 0.626324])</code></pre><h2><a class="nav-anchor" id="Updating-the-index-1" href="#Updating-the-index-1">Updating the index</a></h2><p>Adding and removing points to and from the index is done with <code>push!</code>, <code>pop!</code>, <code>pushfirst!</code> and <code>popfirst!</code> methods. As they imply, point can be added (and quantized) or removed (and reconstructed) at the beginning or end of the index. In practice, this implies updating the point indexes in the index, if the case.</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
            push!(ivfadc, rand(10))
        end
 
 julia&gt; ivfadc
-IVFADCIndex{UInt8,UInt8,Distances.SqEuclidean,Distances.SqEuclidean,Float64} 3-byte encoding, 105 vectors
+IVFADCIndex, naive coarse quantizer, 6-byte encoding (4 + 1×2), 105 Float64 vectors
 
 julia&gt; pop!(ivfadc)
 10-element Array{Float64,1}:
- 0.6202601466489253
- 0.5566815514379718
- 0.2514045850878308
- 0.6014132043384489
- 0.8011253674690959
- 0.1940623912294595
- 0.14443818686855653
- 0.5944314036104829
- 0.7145293650796131
- 0.3930208419694566
+ 0.36725470224837875
+ 0.5991093850558248
+ 0.7715229324503483
+ 0.3969157086250481
+ 0.18545444323613675
+ 0.4738574869267955
+ 0.4872507458690048
+ 0.4190709384817787
+ 1.0079059829981818
+ 0.769283453997689
 
 julia&gt; pushfirst!(ivfadc, 0.1*collect(1:10))
 
 julia&gt; popfirst!(ivfadc)
 10-element Array{Float64,1}:
- 0.06054615038585126
- 0.15644374782252266
- 0.43002887478974017
- 0.5355325680144108
- 0.18318967319621393
- 0.5821127939184141
- 0.7278395248432945
- 0.5641470397479411
- 0.8806947698057787
- 1.0058363412900904</code></pre><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>When adding a new point, its index will always be the number of already existing points. When deleting points, the indexes of all points are updated so that they are consecutive.</p></div></div><p>The function <code>delete_from_index!</code> removes the points indicated in the vector of indexes.</p><pre><code class="language-julia-repl">julia&gt; delete_from_index!(ivfadc, [10, 21, 32]);
+ 0.27324277156476695
+ 0.3113582527841649
+ 0.5125701978034113
+ 0.12727865007351036
+ 0.6595966906043783
+ 0.27768660922464034
+ 0.6626817813684356
+ 0.6422479280183735
+ 0.7031792712468593
+ 0.7851544540168696</code></pre><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>When adding a new point, its index will always be the number of already existing points. When deleting points, the indexes of all points are updated so that they are consecutive.</p></div></div><p>The function <code>delete_from_index!</code> removes the points indicated in the vector of indexes.</p><pre><code class="language-julia-repl">julia&gt; delete_from_index!(ivfadc, [10, 21, 32]);
 
 julia&gt; ivfadc
-IVFADCIndex{UInt8,UInt8,Distances.SqEuclidean,Distances.SqEuclidean,Float64} 3-byte encoding, 101 vectors</code></pre><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>Deleting from the index is a slow operation as the all indexes of the points contained need to be properly updated depending on the positions of the points that are being deleted.</p></div></div><h2><a class="nav-anchor" id="Limits-and-advanced-usage-of-the-index-1" href="#Limits-and-advanced-usage-of-the-index-1">Limits and advanced usage of the index</a></h2><p>It is not possible to add more points than the maximum value of the indexing type</p><pre><code class="language-julia-repl">julia&gt; ivfadc = IVFADCIndex(rand(2,256), kc=2, k=16, m=1, index_type=UInt8)
-IVFADCIndex{UInt8,UInt8,Distances.SqEuclidean,Distances.SqEuclidean,Float64} 2-byte encoding, 256 vectors</code></pre><p>Adding a new point to an index that already has 256 points (which is the maximum for the <code>UInt8</code>) throws an error</p><pre><code class="language-julia-repl">julia&gt; push!(ivfadc, rand(2))
+IVFADCIndex, naive coarse quantizer, 6-byte encoding (4 + 1×2), 101 Float64 vectors</code></pre><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>Deleting from the index is a slow operation as the all indexes of the points contained need to be properly updated depending on the positions of the points that are being deleted.</p></div></div><h2><a class="nav-anchor" id="Limits-and-advanced-usage-of-the-index-1" href="#Limits-and-advanced-usage-of-the-index-1">Limits and advanced usage of the index</a></h2><p>It is not possible to add more points than the maximum value of the indexing type</p><pre><code class="language-julia-repl">julia&gt; ivfadc = IVFADCIndex(rand(2,256), kc=2, k=16, m=1, index_type=UInt8)
+IVFADCIndex, naive coarse quantizer, 2-byte encoding (1 + 1×1), 256 Float64 vectors</code></pre><p>Adding a new point to an index that already has 256 points (which is the maximum for the <code>UInt8</code>) throws an error</p><pre><code class="language-julia-repl">julia&gt; push!(ivfadc, rand(2))
 ERROR: AssertionError: Cannot index, exceeding index capacity of 256 points</code></pre><p>It is however possible to add the point after deleting another one</p><pre><code class="language-julia-repl">julia&gt; popfirst!(ivfadc)
 2-element Array{Float64,1}:
- 0.0829047956012324
- 0.3472631736228926
+ 0.8254773323675308
+ 0.35872424430553496
 
 julia&gt; push!(ivfadc, rand(2))
 
 julia&gt; ivfadc
-IVFADCIndex{UInt8,UInt8,Distances.SqEuclidean,Distances.SqEuclidean,Float64} 2-byte encoding, 256 vectors</code></pre><p>In the example above, the index is being used as a FIFO buffer where the first point is removed and a new one is appended to the buffer.</p><footer><hr/><a class="previous" href="../"><span class="direction">Previous</span><span class="title">Introduction</span></a><a class="next" href="../api/"><span class="direction">Next</span><span class="title">API Reference</span></a></footer></article></body></html>
+IVFADCIndex, naive coarse quantizer, 2-byte encoding (1 + 1×1), 256 Float64 vectors</code></pre><p>In the example above, the index is being used as a FIFO buffer where the first point is removed and a new one is appended to the buffer.</p><footer><hr/><a class="previous" href="../"><span class="direction">Previous</span><span class="title">Introduction</span></a><a class="next" href="../api/"><span class="direction">Next</span><span class="title">API Reference</span></a></footer></article></body></html>
