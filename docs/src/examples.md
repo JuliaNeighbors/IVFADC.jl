@@ -6,8 +6,17 @@ Building an index can be performed using an outer constructor
 using IVFADC
 data = rand(10, 100);  # 100 points, 10 dimensions
 
-ivfadc = IVFADCIndex(data, kc=5, k=8, m=2, index_type=UInt8)
+ivfadc = IVFADCIndex(data, kc=5, k=8, m=2)
 ```
+The coarse quantizer, used in the first level coarse neighbor search, can be specified using the
+`coarse_quantizer` keyword argument
+```@repl index
+ivfadc = IVFADCIndex(data, kc=5, k=8, m=2, coarse_quantizer=:hnsw)  # fast!
+ivfadc = IVFADCIndex(data, kc=5, k=8, m=2, coarse_quantizer=:naive) # simple
+```
+The HNSW coarse quantizer is recommended is 'many' clusters are being used and coarse search
+dominates search time as opposed to in-cluster search. 
+
 
 ## Searching the index
 Searching into the index is done with `knn_search` for multiple queries

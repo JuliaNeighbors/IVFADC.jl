@@ -68,10 +68,12 @@ Base.size(ivfadc::IVFADCIndex, i::Int) = size(ivfadc)[i]
 
 Base.show(io::IO, ivfadc::IVFADCIndex{U,I,Dc,Dr,T,Q}) where {U,I,Dc,Dr,T,Q} = begin
     nvars, nvectors = size(ivfadc)
-    codesize = sizeof(U) * length(ivfadc.residual_quantizer.codebooks) + sizeof(I)
+    idxsize = sizeof(I)
     m = length(ivfadc.residual_quantizer.codebooks)
+    compsize = sizeof(U)
+    codesize = m * compsize + idxsize
     cqstr = ifelse(Q <: HNSWQuantizer, "HNSW", "naive")
-    print(io, "IVFADCIndex, $cqstr coarse quantizer, $codesize-byte encoding ($I+$m*$U), $nvectors $T vectors")
+    print(io, "IVFADCIndex, $cqstr coarse quantizer, $codesize-byte encoding ($idxsize + $compsize×$m), $nvectors $T vectors")
 end
 
 

@@ -7,7 +7,7 @@ CurrentModule=IVFADC
 `IVFADC` implements an inverted file system with asymmetric distance computation for fast approximate nearest neighbor search in large i.e. billion-scale, high dimensional datasets.
 
 ## Implemented features
- - building the index: the outer constructor `IVFADCIndex`
+ - indexing: support for naive (brute search) and [HNSW](https://arxiv.org/pdf/1603.09320.pdf) coarse quantizers
  - adding points to the index: `push!`, `pushfirst!`
  - removing points from the index: `pop!`, `popfirst!`, `delete_from_index!`
  - searching into the index: `knn_search`
@@ -33,3 +33,7 @@ or
 Pkg.add(PackageSpec(url="https://github.com/zgornel/IVFADC.jl", rev="master"))
 ```
 for the latest `master` branch.
+
+## References
+ - [Jègou et al. "Product quantization for nearest neighbor search", IEEE TPAMI, 2011](https://hal.inria.fr/file/index/docid/514462/filename/paper_hal.pdf)
+ - [Baranchuk et al. "Revisiting the inverted indices for billion-scale approximate nearest neighbors, ECCV, 2018"](http://openaccess.thecvf.com/content_ECCV_2018/papers/Dmitry_Baranchuk_Revisiting_the_Inverted_ECCV_2018_paper.pdf)
