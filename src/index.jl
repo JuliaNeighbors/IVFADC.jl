@@ -24,32 +24,13 @@ const InvertedIndex{I,U} = Vector{InvertedList{I,U}}
 
 
 """
-    CoarseQuantizer{D<:Distances.PreMetric, T<:AbstractFloat}
-
-Coarse quantization structure. The `vector` fields contains the
-coarse vectors while `distance` contains the distance that is
-used to calculate the distance from a point to the coarse vectors.
-"""
-struct CoarseQuantizer{D<:Distances.PreMetric, T<:AbstractFloat}
-    vectors::Matrix{T}
-    distance::D
-end
-
-
-Base.show(io::IO, cq::CoarseQuantizer{D,T}) where {D,T} = begin
-    nrows, nclusters = size(cq.vectors)
-    print(io, "CoarseQuantizer{$D,$T}, $nrows×$nclusters cluster centres")
-end
-
-
-"""
-    IVFADCIndex{U<:Unsigned, I<:Unsigned, Dc<:Distances.PreMetric, Dr<:Distances.PreMetric, T<:AbstractFloat}
+    IVFADCIndex{U<:Unsigned, I<:Unsigned, Dc<:Distances.PreMetric, Dr<:Distances.PreMetric, T<:AbstractFloat, Q<:AbstractCoarseQuantizer{Dc,T}}
 
 The inverse file system object. It allows for approximate nearest
 neighbor search into the contained vectors.
 
 # Fields
-  * `coarse_quantizer::CoarseQuantizer{Dc,T}` contains the coarse vectors
+  * `coarse_quantizer::AbstractCoarseQuantizer{Dc,T}` contains the coarse vectors
   * `residual_quantizer::QuantizedArrays.OrthogonalQuantizer{U,Dr,T,2}`
 is employed to quantize vectors when adding to the index
   * `inverse_index::InvertedIndex{I,U}` is the actual inverse index employed
@@ -59,8 +40,9 @@ struct IVFADCIndex{U<:Unsigned,
                    I<:Unsigned,
                    Dc<:Distances.PreMetric,
                    Dr<:Distances.PreMetric,
-                   T<:AbstractFloat}
-    coarse_quantizer::CoarseQuantizer{Dc,T}
+                   T<:AbstractFloat,
+                   Q<:AbstractCoarseQuantizer{Dc,T}}
+    coarse_quantizer::Q
     residual_quantizer::QuantizedArrays.OrthogonalQuantizer{U,Dr,T,2}
     inverse_index::InvertedIndex{I,U}
 end
@@ -80,15 +62,18 @@ Base.length(ivfadc::IVFADCIndex) =
 
 Returns a tuple with the dimensionality and number of the vectors indexed by `ivfadc`.
 """
-Base.size(ivfadc::IVFADCIndex) = (size(ivfadc.coarse_quantizer.vectors, 1), length(ivfadc))
+Base.size(ivfadc::IVFADCIndex) = (size(ivfadc.coarse_quantizer, 1), length(ivfadc))
 Base.size(ivfadc::IVFADCIndex, i::Int) = size(ivfadc)[i]
 
 
-Base.show(io::IO, ivfadc::IVFADCIndex{U,I,Dc,Dr,T}) where {U,I,Dc,Dr,T} = begin
+Base.show(io::IO, ivfadc::IVFADCIndex{U,I,Dc,Dr,T,Q}) where {U,I,Dc,Dr,T,Q} = begin
     nvars, nvectors = size(ivfadc)
-    nc = size(ivfadc.coarse_quantizer.vectors, 2)
-    codesize = sizeof(U) * length(ivfadc.residual_quantizer.codebooks) + sizeof(I)
-    print(io, "IVFADCIndex{$U,$I,$Dc,$Dr,$T} $codesize-byte encoding, $nvectors vectors")
+    idxsize = sizeof(I)
+    m = length(ivfadc.residual_quantizer.codebooks)
+    compsize = sizeof(U)
+    codesize = m * compsize + idxsize
+    cqstr = ifelse(Q <: HNSWQuantizer, "HNSW", "naive")
+    print(io, "IVFADCIndex, $cqstr coarse quantizer, $codesize-byte encoding ($idxsize + $compsize×$m), $nvectors $T vectors")
 end
 
 
@@ -105,6 +90,7 @@ Main constructor for building an inverse file system for billion-scale ANN searc
 in the coarse quantization step
   * `k::Int=DEFAULT_QUANTIZATION_K` number of residual quantization levels to use
   * `m::Int=DEFAULT_QUANTIZATION_M` number of residual quantizers to use
+  * `coarse_quantizer::Symbol=DEFAULT_COARSE_QUANTIZER` coarse quantizer
   * `coarse_distance=DEFAULT_COARSE_DISTANCE` coarse quantization distance
   * `quantization_distance=DEFAULT_QUANTIZATION_DISTANCE` residual quantization distance
   * `quantization_method=DEFAULT_QUANTIZATION_METHOD` residual quantization method
@@ -118,6 +104,7 @@ function IVFADCIndex(data::Matrix{T};
                      kc::Int=DEFAULT_COARSE_K,
                      k::Int=DEFAULT_QUANTIZATION_K,
                      m::Int=DEFAULT_QUANTIZATION_M,
+                     coarse_quantizer::Symbol=DEFAULT_COARSE_QUANTIZER,
                      coarse_distance::Distances.PreMetric=DEFAULT_COARSE_DISTANCE,
                      quantization_distance::Distances.PreMetric=DEFAULT_QUANTIZATION_DISTANCE,
                      quantization_method::Symbol=DEFAULT_QUANTIZATION_METHOD,
@@ -131,6 +118,7 @@ function IVFADCIndex(data::Matrix{T};
     @assert kc >= 2 "Number of coarse clusters has to be >= 2"
     @assert k <= nvectors "Number of quantization levels  has to be <= $nvectors"
     @assert m >= 1 && m <= nrows "Number of codebooks has to be between 1 and $nrows"
+    @assert coarse_quantizer in [:naive, :hnsw] "Coarse quantizer can be :naive or :hnsw only"
     @assert coarse_maxiter > 0 "Number of clustering iterations has to be > 0"
     @assert quantization_maxiter > 0 "Number of clustering iterations has to be > 0"
     @assert QuantizedArrays.TYPE_TO_BITS[index_type] >=
@@ -163,8 +151,16 @@ function IVFADCIndex(data::Matrix{T};
     ii = _build_inverted_index(rq, cmodel, residuals, index_type=index_type)
 
     # Return
-    @debug "Finalizing..."
-    cq = CoarseQuantizer(cmodel.centers, coarse_distance)
+    @debug "Building coarse quantizer..."
+    if coarse_quantizer == :naive
+        cq = NaiveQuantizer{typeof(coarse_distance),
+                eltype(cmodel.centers)}(cmodel.centers)
+    else
+        hnsw = HierarchicalNSW([cmodel.centers[:,i] for i in 1:kc],
+                                metric=coarse_distance)
+        add_to_graph!(hnsw)
+        cq = HNSWQuantizer(hnsw)
+    end
     return IVFADCIndex(cq, rq, ii)
 end
 
@@ -213,18 +209,15 @@ function knn_search(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
     # Checks and initializations
     @assert k >= 1 "Number of neighbors must be k >= 1"
     @assert w >= 1 "Number of clusters to search in must be w >= 1"
-
-    cq_distance = ivfadc.coarse_quantizer.distance
-    cq_clcenters = ivfadc.coarse_quantizer.vectors
-    nclusters = size(cq_clcenters, 2)
+    cq = ivfadc.coarse_quantizer
+    nclusters = size(cq, 2)
     rq_cbooks = ivfadc.residual_quantizer.codebooks
     m, n = length(rq_cbooks), length(point)
     w = min(w, nclusters)
 
     # Find the 'w' closest coarse vectors and calculate residuals
-    coarse_distances = colwise(cq_distance, cq_clcenters, point)
-    closest_clusters = sortperm(coarse_distances)[1:w]
-    residuals = point .- cq_clcenters[:, closest_clusters]
+    closest_clusters, coarse_distances = coarse_search(cq, point, w)
+    residuals = _closest_cluster_residuals(cq, point, closest_clusters)
 
     # Calculate distances between point and the vectors
     # from the clusters using the residual distances.
@@ -233,12 +226,12 @@ function knn_search(ivfadc::IVFADCIndex{U,I,Dc,Dr,T},
     maxdist = zero(T)
     difftables = Vector{LittleDict{U,T}}(undef, m)
     @inbounds for j = eachindex(closest_clusters)
-        dc = coarse_distances[closest_clusters[j]]
+        dc = coarse_distances[j]
         # Calculate all residual distances
         # (between the vector and the codebooks of the residual quantizer)
         for i = eachindex(difftables)
             rr = QuantizedArrays.rowrange(n, m, i)
-            diffs = colwise(cq_distance, rq_cbooks[i].vectors, residuals[rr, j])
+            diffs = colwise(Dc(), rq_cbooks[i].vectors, residuals[rr, j])
             difftables[i] = LittleDict{U,T}(rq_cbooks[i].codes, diffs)
         end
         # Loop through the iverted list and calculate

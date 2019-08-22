@@ -39,11 +39,12 @@ ivfadc = IVFADCIndex(data,
                      kc=kc,
                      k=k,
                      m=m,
+                     coarse_quantizer=:naive,
                      coarse_distance=SqEuclidean(),
                      quantization_distance=SqEuclidean(),
                      quantization_method=:pq,
                      index_type=UInt16)
-# IVFADCIndex{UInt8,UInt16,SqEuclidean,SqEuclidean,Float32} 12-byte encoding, 1000 vectors
+# IVFADCIndex, naive coarse quantizer, 12-byte encoding (2 + 1×10), 1000 Float32 vectors
 ```
 
 ### Add and delete points to the index
@@ -115,3 +116,4 @@ This is work in progress and bugs may still be present...¯\\_(ツ)_/¯ Do not w
 ## References
 
  - [Jègou et al. "Product quantization for nearest neighbor search", IEEE TPAMI, 2011](https://hal.inria.fr/file/index/docid/514462/filename/paper_hal.pdf)
+ - [Baranchuk et al. "Revisiting the inverted indices for billion-scale approximate nearest neighbors, ECCV, 2018"](http://openaccess.thecvf.com/content_ECCV_2018/papers/Dmitry_Baranchuk_Revisiting_the_Inverted_ECCV_2018_paper.pdf)
