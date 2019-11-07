@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Usage examples ·   </title><link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/4.2.0/normalize.min.css" rel="stylesheet" type="text/css"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.2.0/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link href="../assets/documenter.css" rel="stylesheet" type="text/css"/></head><body><nav class="toc"><a href="../"><img class="logo" src="../assets/logo.png" alt="   logo"/></a><h1>  </h1><select id="version-selector" onChange="window.location.href=this.value" style="visibility: hidden"></select><form class="search" id="search-form" action="../search/"><input id="search-query" name="q" type="text" placeholder="Search docs"/></form><ul><li><a class="toctext" href="../">Introduction</a></li><li class="current"><a class="toctext" href>Usage examples</a><ul class="internal"><li><a class="toctext" href="#Building-an-IVFADC-index-1">Building an IVFADC index</a></li><li><a class="toctext" href="#Searching-the-index-1">Searching the index</a></li><li><a class="toctext" href="#Updating-the-index-1">Updating the index</a></li><li><a class="toctext" href="#Limits-and-advanced-usage-of-the-index-1">Limits and advanced usage of the index</a></li></ul></li><li><a class="toctext" href="../api/">API Reference</a></li></ul></nav><article id="docs"><header><nav><ul><li><a href>Usage examples</a></li></ul><a class="edit-page" href="https://github.com/zgornel/IVFADC.jl/blob/master/docs/src/examples.md"><span class="fa"></span> Edit on GitHub</a></nav><hr/><div id="topbar"><span>Usage examples</span><a class="fa fa-bars" href="#"></a></div></header><h1><a class="nav-anchor" id="Usage-examples-1" href="#Usage-examples-1">Usage examples</a></h1><h2><a class="nav-anchor" id="Building-an-IVFADC-index-1" href="#Building-an-IVFADC-index-1">Building an IVFADC index</a></h2><p>Building an index can be performed using an outer constructor</p><pre><code class="language-julia-repl">julia&gt; using IVFADC
+
+julia&gt; data = rand(10, 100);  # 100 points, 10 dimensions
+
+julia&gt; ivfadc = IVFADCIndex(data, kc=5, k=8, m=2)
+IVFADCIndex, naive coarse quantizer, 6-byte encoding (4 + 1×2), 100 Float64 vectors</code></pre><p>The coarse quantizer, used in the first level coarse neighbor search, can be specified using the <code>coarse_quantizer</code> keyword argument</p><pre><code class="language-julia-repl">julia&gt; ivfadc = IVFADCIndex(data, kc=5, k=8, m=2, coarse_quantizer=:hnsw)  # fast!
+IVFADCIndex, HNSW coarse quantizer, 6-byte encoding (4 + 1×2), 100 Float64 vectors
+
+julia&gt; ivfadc = IVFADCIndex(data, kc=5, k=8, m=2, coarse_quantizer=:naive) # simple
+IVFADCIndex, naive coarse quantizer, 6-byte encoding (4 + 1×2), 100 Float64 vectors</code></pre><p>The HNSW coarse quantizer is recommended is &#39;many&#39; clusters are being used and coarse search dominates search time as opposed to in-cluster search. </p><h2><a class="nav-anchor" id="Searching-the-index-1" href="#Searching-the-index-1">Searching the index</a></h2><p>Searching into the index is done with <code>knn_search</code> for multiple queries</p><pre><code class="language-julia-repl">julia&gt; points = [rand(10) for _ in 1:3];
+
+julia&gt; idxs, dists = knn_search(ivfadc, points, 5)
+(Array{UInt32,1}[[0x0000002b, 0x0000004c, 0x00000025, 0x0000005a, 0x00000028], [0x00000052, 0x00000063, 0x00000014, 0x00000037, 0x00000027], [0x00000011, 0x00000029, 0x00000010, 0x0000001c, 0x0000004a]], Array{Float64,1}[[1.16005, 1.33942, 1.37424, 1.38669, 1.53475], [0.536787, 0.607866, 0.680027, 0.683599, 0.711491], [1.43329, 1.43329, 1.4974, 1.4974, 1.4974]])</code></pre><p>as well as single queries</p><pre><code class="language-julia-repl">julia&gt; point = data[:, 55];
+
+julia&gt; idxs, dists = knn_search(ivfadc, point, 5)
+(UInt32[0x00000036, 0x0000003a, 0x0000003e, 0x00000044, 0x00000057], [0.926899, 1.04755, 1.05666, 1.05666, 1.27094])</code></pre><p>Internally, the IVFADC index uses 0-based indexing; to retrieve the actual 1-based neighbor indexes that correspond to indexes in <code>data</code>, a simple transform has to be performed:</p><pre><code class="language-julia-repl">julia&gt; int_idxs = Int.(idxs) .+ 1
+5-element Array{Int64,1}:
+ 55
+ 59
+ 63
+ 69
+ 88</code></pre><p>Results may vary depending on how many clusters are being used to search into, option configurable through the keyword argument <code>w</code> of <code>knn_search</code></p><pre><code class="language-julia-repl">julia&gt; knn_search(ivfadc, point, 5, w=10)  # search into 10 clusters
+(UInt32[0x00000036, 0x0000003a, 0x0000003e, 0x00000044, 0x00000057], [0.926899, 1.04755, 1.05666, 1.05666, 1.27094])</code></pre><h2><a class="nav-anchor" id="Updating-the-index-1" href="#Updating-the-index-1">Updating the index</a></h2><p>Adding and removing points to and from the index is done with <code>push!</code>, <code>pop!</code>, <code>pushfirst!</code> and <code>popfirst!</code> methods. As they imply, point can be added (and quantized) or removed (and reconstructed) at the beginning or end of the index. In practice, this implies updating the point indexes in the index, if the case.</p><pre><code class="language-julia-repl">julia&gt; for i in 1:5
+           push!(ivfadc, rand(10))
+       end
+
+julia&gt; ivfadc
+IVFADCIndex, naive coarse quantizer, 6-byte encoding (4 + 1×2), 105 Float64 vectors
+
+julia&gt; pop!(ivfadc)
+10-element Array{Float64,1}:
+ 0.4278865893757469
+ 0.48768402317231363
+ 0.5669178941501075
+ 0.4967803874304485
+ 0.2512302354041912
+ 0.5013444839659885
+ 0.9092147732548748
+ 0.10947415853711279
+ 0.3032012403226358
+ 0.17239422778439623
+
+julia&gt; pushfirst!(ivfadc, 0.1*collect(1:10))
+
+julia&gt; popfirst!(ivfadc)
+10-element Array{Float64,1}:
+ 0.30934330887804384
+ 0.3870051821983087
+ 0.21908583060157394
+ 0.5562288311655249
+ 0.3008518663887265
+ 0.7256142520362612
+ 0.4263482326184592
+ 0.7082323645729623
+ 0.7540262753194262
+ 0.5544077840927342</code></pre><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>When adding a new point, its index will always be the number of already existing points. When deleting points, the indexes of all points are updated so that they are consecutive.</p></div></div><p>The function <code>delete_from_index!</code> removes the points indicated in the vector of indexes.</p><pre><code class="language-julia-repl">julia&gt; delete_from_index!(ivfadc, [10, 21, 32]);
+
+julia&gt; ivfadc
+IVFADCIndex, naive coarse quantizer, 6-byte encoding (4 + 1×2), 101 Float64 vectors</code></pre><div class="admonition note"><div class="admonition-title">Note</div><div class="admonition-text"><p>Deleting from the index is a slow operation as the all indexes of the points contained need to be properly updated depending on the positions of the points that are being deleted.</p></div></div><h2><a class="nav-anchor" id="Limits-and-advanced-usage-of-the-index-1" href="#Limits-and-advanced-usage-of-the-index-1">Limits and advanced usage of the index</a></h2><p>It is not possible to add more points than the maximum value of the indexing type</p><pre><code class="language-julia-repl">julia&gt; ivfadc = IVFADCIndex(rand(2,256), kc=2, k=16, m=1, index_type=UInt8)
+IVFADCIndex, naive coarse quantizer, 2-byte encoding (1 + 1×1), 256 Float64 vectors</code></pre><p>Adding a new point to an index that already has 256 points (which is the maximum for the <code>UInt8</code>) throws an error</p><pre><code class="language-julia-repl">julia&gt; push!(ivfadc, rand(2))
+ERROR: AssertionError: Cannot index, exceeding index capacity of 256 points</code></pre><p>It is however possible to add the point after deleting another one</p><pre><code class="language-julia-repl">julia&gt; popfirst!(ivfadc)
+2-element Array{Float64,1}:
+ 0.18229975483475844
+ 0.04730535031025618
+
+julia&gt; push!(ivfadc, rand(2))
+
+julia&gt; ivfadc
+IVFADCIndex, naive coarse quantizer, 2-byte encoding (1 + 1×1), 256 Float64 vectors</code></pre><p>In the example above, the index is being used as a FIFO buffer where the first point is removed and a new one is appended to the buffer.</p><footer><hr/><a class="previous" href="../"><span class="direction">Previous</span><span class="title">Introduction</span></a><a class="next" href="../api/"><span class="direction">Next</span><span class="title">API Reference</span></a></footer></article></body></html>
