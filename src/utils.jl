@@ -26,7 +26,7 @@ end
 Pops from the index `ivfadc` the point with the highest index and returns it updating
 the index as well.
 """
-pop!(ivfadc) = _pop!(ivfadc, :last)
+pop!(ivfadc::IVFADCIndex) = _pop!(ivfadc, :last)
 
 
 """
@@ -34,7 +34,7 @@ pop!(ivfadc) = _pop!(ivfadc, :last)
 
 Pops from the index `ivfadc` the first point and returns it updating the index as well.
 """
-popfirst!(ivfadc) = _pop!(ivfadc, :first)
+popfirst!(ivfadc::IVFADCIndex) = _pop!(ivfadc, :first)
 
 
 # Utility function for poping
@@ -111,7 +111,7 @@ end
 Pushes `point` to the end of index `ivfadc`; the point is assigned to a cluster
 and its quantized code added to the inverted list corresponding to the cluster.
 """
-push!(ivfadc, point) = _push!(ivfadc, point, :last)
+push!(ivfadc::IVFADCIndex, point) = _push!(ivfadc, point, :last)
 
 
 """
@@ -120,7 +120,7 @@ push!(ivfadc, point) = _push!(ivfadc, point, :last)
 Pushes `point` to the beginning of index `ivfadc`; the point is assigned to a cluster
 and its quantized code added to the inverted list corresponding to the cluster.
 """
-pushfirst!(ivfadc, point) = _push!(ivfadc, point, :first)
+pushfirst!(ivfadc::IVFADCIndex, point) = _push!(ivfadc, point, :first)
 
 
 # Utility function for pushing
